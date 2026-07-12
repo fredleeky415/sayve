@@ -1,0 +1,51 @@
+{
+  "name": "sayve",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.7.0",
+  "engines": {
+    "node": ">=22 <25"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "verify:scripts": "node --check scripts/founder-setup-report.mjs && node --check scripts/generate-setup-env-examples.mjs && node --check scripts/report-deploy-proof.mjs && node --check scripts/report-go-live.mjs && node --check scripts/verify-deployment.mjs && node --check scripts/verify-env.mjs && node --check scripts/verify-migrations.mjs && node --check scripts/verify-security-headers.mjs && node --check scripts/verify-setup-artifacts.mjs && node scripts/verify-security-headers.mjs && node scripts/verify-setup-artifacts.mjs",
+    "report:setup": "node scripts/founder-setup-report.mjs",
+    "report:setup:artifacts": "node scripts/generate-setup-env-examples.mjs write",
+    "report:deploy-proof": "node scripts/report-deploy-proof.mjs",
+    "report:go-live": "node scripts/report-go-live.mjs",
+    "verify:env": "node scripts/verify-env.mjs",
+    "verify:private-beta": "SAYVE_ENV_TARGET=private-beta pnpm run verify:env && pnpm run verify",
+    "verify:public-launch": "SAYVE_ENV_TARGET=public-launch pnpm run verify:env && pnpm run verify",
+    "verify:deploy:private-beta": "SAYVE_REQUIRE_PUBLIC_READY=0 pnpm run verify:deploy",
+    "verify:deploy:strict-private-beta": "SAYVE_REQUIRE_PUBLIC_READY=0 SAYVE_REQUIRE_AUTH_SMOKE=1 SAYVE_REQUIRE_TWO_MEMBER_SMOKE=1 SAYVE_REQUIRE_VIEWER_SMOKE=1 SAYVE_REQUIRE_INVITE_SMOKE=1 SAYVE_REQUIRE_BOOTSTRAP_SMOKE=1 SAYVE_REQUIRE_OPENAI_SMOKE=1 SAYVE_REQUIRE_PRIVACY_SMOKE=1 pnpm run verify:deploy",
+    "verify:deploy:strict-private-beta:proof": "SAYVE_DEPLOY_PROOF_REPORT_PATH=outputs/setup/deploy-proof-report.json SAYVE_REQUIRE_PUBLIC_READY=0 SAYVE_REQUIRE_AUTH_SMOKE=1 SAYVE_REQUIRE_TWO_MEMBER_SMOKE=1 SAYVE_REQUIRE_VIEWER_SMOKE=1 SAYVE_REQUIRE_INVITE_SMOKE=1 SAYVE_REQUIRE_BOOTSTRAP_SMOKE=1 SAYVE_REQUIRE_OPENAI_SMOKE=1 SAYVE_REQUIRE_PRIVACY_SMOKE=1 pnpm run verify:deploy",
+    "verify:deploy:public-launch": "SAYVE_REQUIRE_PUBLIC_READY=1 pnpm run verify:deploy",
+    "typecheck": "tsc --noEmit",
+    "verify:migrations": "node scripts/verify-migrations.mjs",
+    "verify": "pnpm run verify:scripts && pnpm run verify:env && pnpm run typecheck && pnpm run verify:migrations && pnpm run test && pnpm run build",
+    "verify:deploy": "node scripts/verify-deployment.mjs",
+    "lint": "next lint",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4",
+    "lucide-react": "^0.468.0",
+    "next": "^15.1.0",
+    "openai": "^4.76.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.1.0",
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.0.1",
+    "@types/react-dom": "^19.0.2",
+    "eslint": "^9.17.0",
+    "eslint-config-next": "^15.1.0",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

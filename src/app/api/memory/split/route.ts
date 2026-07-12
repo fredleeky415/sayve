@@ -1,0 +1,26 @@
+import { invalidJsonResponse, readJsonObject } from "@/server/api/json";
+import { isSupabaseAuthRequired, resolveRequestAuthContext } from "@/server/auth/request-context";
+import { requestMemorySplit } from "@/server/memory/engine";
+import { noStoreJson } from "@/server/api/http";
+
+export async function POST(request: Request) {
+  const authBeforeBody = isSupabaseAuthRequired() ? await resolveRequestAuthContext(request) : undefined;
+  if (authBeforeBody && !authBeforeBody.ok) return authBeforeBody.response;
+
+  let body: Record<string, unknown>;
+  try {
+    body = await readJsonObject(request);
+  } catch {
+    return invalidJsonResponse();
+  }
+  const auth = authBeforeBody ?? (await resolveRequestAuthContext(request, typeof body.householdId === "string" ? body.householdId : undefined));
+  if (!auth.ok) return auth.response;
+  return noStoreJson(
+    await requestMemorySplit({
+      householdId: auth.context.householdId,
+      actorUserId: auth.context.userId,
+      memoryObjectId: typeof body.memoryObjectId === "string" ? body.memoryObjectId : undefined,
+      reason: typeof body.reason === "string" ? body.reason : undefined
+    })
+  );
+}

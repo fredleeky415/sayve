@@ -170,8 +170,42 @@ async function pause(ms: number) {
   await new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
-async function parseApiResult(response: Response) {
-  const payload = (await response.json()) as Partial<ApiResult> & { error?: string; protection?: { vercel_auth_enabled?: boolean } };
+export function fallbackApiResultFromText(status: number, text: string) {
+  const normalized = text.trim().toLowerCase();
+  if (
+    normalized.includes("private_beta_access_required") ||
+    normalized.includes("private beta access required") ||
+    normalized.includes("vercel authentication") ||
+    normalized.includes("authentication required")
+  ) {
+    return { payload: captureFailedResult("私測登入好似過期咗，重新開一次 Sayve 入口再試。"), status };
+  }
+  if (status === 401 || status === 403) {
+    return { payload: captureFailedResult("登入狀態好似斷咗，重新登入再試。"), status };
+  }
+  if (status >= 500) {
+    return { payload: captureFailedResult("Sayve 而家有少少忙，等一等再試。"), status };
+  }
+  return { payload: captureFailedResult(), status };
+}
+
+export async function parseApiResult(response: Response) {
+  const contentType = response.headers.get("content-type") ?? "";
+  const raw = await response.text();
+  if (!raw.trim()) {
+    return fallbackApiResultFromText(response.status, "");
+  }
+
+  if (!contentType.toLowerCase().includes("application/json")) {
+    return fallbackApiResultFromText(response.status, raw);
+  }
+
+  let payload: Partial<ApiResult> & { error?: string; protection?: { vercel_auth_enabled?: boolean } };
+  try {
+    payload = JSON.parse(raw) as Partial<ApiResult> & { error?: string; protection?: { vercel_auth_enabled?: boolean } };
+  } catch {
+    return fallbackApiResultFromText(response.status, raw);
+  }
   if (
     typeof payload.current_state === "string" &&
     typeof payload.needs_user_input === "boolean" &&
@@ -183,7 +217,7 @@ async function parseApiResult(response: Response) {
   if (payload.error === "private_beta_access_required" || payload.protection?.vercel_auth_enabled) {
     return { payload: captureFailedResult("私測登入好似過期咗，重新開一次 Sayve 入口再試。"), status: response.status };
   }
-  return { payload: captureFailedResult(), status: response.status };
+  return fallbackApiResultFromText(response.status, raw);
 }
 
 async function postJson(path: string, body: Record<string, unknown>) {

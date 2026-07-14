@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { conversationRequestBody, householdBootstrapMessage, householdCanWrite, householdReadyForInteraction, shouldBlockSwipeStart, shouldPreserveHouseholdsOnRefreshFailure, shouldRefreshViewsAfterResult, shouldResetTransientMemoryView, shouldRetryApiResult, shouldShowInitialization, swipeDirection } from "./family-memory-app";
+import { conversationRequestBody, fallbackApiResultFromText, householdBootstrapMessage, householdCanWrite, householdReadyForInteraction, parseApiResult, shouldBlockSwipeStart, shouldPreserveHouseholdsOnRefreshFailure, shouldRefreshViewsAfterResult, shouldResetTransientMemoryView, shouldRetryApiResult, shouldShowInitialization, swipeDirection } from "./family-memory-app";
 
 describe("family memory app conversation routing", () => {
   it("always carries the selected household into ask requests", () => {
@@ -83,5 +83,22 @@ describe("family memory app conversation routing", () => {
     expect(shouldRefreshViewsAfterResult({ current_state: "capture_failed", needs_user_input: true } as never)).toBe(false);
     expect(shouldRefreshViewsAfterResult({ current_state: "active", needs_user_input: true } as never)).toBe(false);
     expect(shouldRefreshViewsAfterResult({ current_state: "active", needs_user_input: false } as never)).toBe(true);
+  });
+
+  it("turns non-json protection pages into a specific re-entry message", async () => {
+    const response = new Response("Sayve private beta access required.", {
+      status: 401,
+      headers: { "content-type": "text/plain; charset=utf-8" }
+    });
+
+    const result = await parseApiResult(response);
+    expect(result.payload.current_state).toBe("capture_failed");
+    expect(result.payload.next_best_question).toBe("私測登入好似過期咗，重新開一次 Sayve 入口再試。");
+  });
+
+  it("downgrades opaque server pages into a calmer retry message", () => {
+    const result = fallbackApiResultFromText(503, "<html><body>upstream error</body></html>");
+    expect(result.payload.current_state).toBe("capture_failed");
+    expect(result.payload.next_best_question).toBe("Sayve 而家有少少忙，等一等再試。");
   });
 });

@@ -58,7 +58,7 @@ b {
   min-height: 100vh;
   display: grid;
   grid-template-rows: auto 1fr;
-  touch-action: manipulation;
+  touch-action: auto;
 }
 
 .appTopbar {
@@ -2640,6 +2640,7 @@ b {
     scroll-snap-stop: always;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-x: contain;
+    touch-action: pan-x;
     scrollbar-width: none;
   }
 

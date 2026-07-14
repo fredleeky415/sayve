@@ -5,6 +5,29 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { authStorageKeys, browserInviteRedirectUrl, getBrowserSupabaseClient, storeBrowserSession, type BrowserSession } from "./auth-client";
 
+export function inviteAcceptanceMessage(errorCode?: string, fallback?: string) {
+  switch (errorCode) {
+    case "invite_not_found":
+      return "搵唔到呢條 invite。";
+    case "invite_already_accepted":
+      return "呢條 invite 已經用過。";
+    case "invite_expired":
+      return "呢條 invite 已過期，請叫 founder 重發。";
+    case "invite_email_required":
+      return "呢條 invite 綁咗指定 email，請用受邀嗰個 Google / email 登入。";
+    case "invite_email_mismatch":
+      return "你而家登入嘅 email 同 invite 唔一致，請轉返受邀嗰個帳戶。";
+    case "invite_invalid_role":
+      return "呢條 invite 角色設定有問題，請叫 founder 重發。";
+    case "invite_member_upsert_failed":
+      return "暫時加入唔到家庭，稍後再試一次。";
+    case "supabase_not_configured":
+      return "Supabase Auth 未設定，暫時未可以接受邀請。";
+    default:
+      return fallback?.trim() || "暫時加入唔到家庭。";
+  }
+}
+
 export function InviteAcceptance({ inviteToken }: { inviteToken: string }) {
   const [invitePreview, setInvitePreview] = useState<{
     loading: boolean;
@@ -207,9 +230,14 @@ export function InviteAcceptance({ inviteToken }: { inviteToken: string }) {
         },
         body: JSON.stringify({ token: inviteToken })
       });
-      const result = (await response.json()) as { ok?: boolean; error?: string; data?: { householdId?: string; role?: string } };
+      const result = (await response.json()) as {
+        ok?: boolean;
+        error?: string;
+        errorCode?: string;
+        data?: { householdId?: string; role?: string };
+      };
       if (!response.ok || !result.ok) {
-        setMessage(result.error ?? "暫時加入唔到家庭。");
+        setMessage(inviteAcceptanceMessage(result.errorCode, result.error));
         return;
       }
       const householdId = result.data?.householdId ?? "";

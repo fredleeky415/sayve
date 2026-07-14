@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { conversationRequestBody, householdCanWrite, householdReadyForInteraction, shouldBlockSwipeStart, shouldPreserveHouseholdsOnRefreshFailure, shouldRefreshViewsAfterResult, shouldResetTransientMemoryView, shouldRetryApiResult, shouldShowInitialization, swipeDirection } from "./family-memory-app";
+import { conversationRequestBody, householdBootstrapMessage, householdCanWrite, householdReadyForInteraction, shouldBlockSwipeStart, shouldPreserveHouseholdsOnRefreshFailure, shouldRefreshViewsAfterResult, shouldResetTransientMemoryView, shouldRetryApiResult, shouldShowInitialization, swipeDirection } from "./family-memory-app";
 
 describe("family memory app conversation routing", () => {
   it("always carries the selected household into ask requests", () => {
@@ -55,6 +55,12 @@ describe("family memory app conversation routing", () => {
     expect(shouldShowInitialization("token", true, 1, "呢個帳戶未加入任何家庭。")).toBe(false);
     expect(shouldShowInitialization("token", true, 0, "家庭資料暫時未連上，Sayve 先保留你而家個家庭。")).toBe(false);
     expect(shouldShowInitialization("token", true, 0, "呢個帳戶未加入任何家庭。")).toBe(true);
+  });
+
+  it("translates household bootstrap failures into calm user-facing setup messages", () => {
+    expect(householdBootstrapMessage("household_snapshot_init_failed")).toBe("家庭記憶未初始化完成，請稍後再試一次。");
+    expect(householdBootstrapMessage("household_member_create_failed")).toBe("家庭開咗，但未綁好 founder 身份，稍後再試一次。");
+    expect(householdBootstrapMessage(undefined, "raw db error")).toBe("raw db error");
   });
 
   it("waits for household resolution before allowing logged-in interactions", () => {

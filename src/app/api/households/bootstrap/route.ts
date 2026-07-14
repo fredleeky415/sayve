@@ -59,11 +59,11 @@ export async function POST(request: Request) {
   });
 
   if (!created.configured) {
-    return noStoreJson({ ok: false, error: created.error }, { status: 503 });
+    return noStoreJson({ ok: false, error: created.error, errorCode: created.errorCode }, { status: 503 });
   }
 
   if (!created.ok) {
-    return noStoreJson({ ok: false, error: created.error ?? "Could not create household." }, { status: 500 });
+    return noStoreJson({ ok: false, error: created.error ?? "Could not create household.", errorCode: created.errorCode }, { status: 500 });
   }
 
   const household = created.data?.household as { id?: string; name?: string } | undefined;

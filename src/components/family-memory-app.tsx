@@ -127,6 +127,25 @@ export function shouldShowInitialization(accessToken: string | null | undefined,
   return Boolean(accessToken) && householdsResolved && householdCount === 0 && authMessage === "呢個帳戶未加入任何家庭。";
 }
 
+export function householdBootstrapMessage(errorCode?: string, fallback?: string) {
+  switch (errorCode) {
+    case "login_required":
+      return "請先登入 Sayve。";
+    case "temporary_unavailable":
+      return "家庭初始化暫時未連上，稍後再試一次。";
+    case "supabase_not_configured":
+      return "Supabase 未設定好，暫時未可以開家庭。";
+    case "household_create_failed":
+      return "暫時開唔到家庭，稍後再試一次。";
+    case "household_member_create_failed":
+      return "家庭開咗，但未綁好 founder 身份，稍後再試一次。";
+    case "household_snapshot_init_failed":
+      return "家庭記憶未初始化完成，請稍後再試一次。";
+    default:
+      return fallback?.trim() || "暫時開唔到第一個家庭。";
+  }
+}
+
 export function householdReadyForInteraction(accessToken: string | null | undefined, householdsResolved: boolean, householdId: string) {
   if (!accessToken) return true;
   if (!householdsResolved) return false;
@@ -689,10 +708,11 @@ export function FamilyMemoryApp() {
       const result = (await response.json()) as {
         ok?: boolean;
         error?: string;
+        errorCode?: string;
         household?: HouseholdOption;
       };
       if (!response.ok || !result.ok || !result.household?.id) {
-        setAuthMessage(result.error ?? "暫時開唔到第一個家庭。");
+        setAuthMessage(householdBootstrapMessage(result.errorCode, result.error));
         return;
       }
       setHouseholds([result.household]);

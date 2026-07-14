@@ -787,6 +787,57 @@ export function FamilyMemoryApp() {
     return !((target as HTMLElement | null)?.closest("input, textarea, button, select, a"));
   }
 
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const finishSwipe = (clientX?: number, clientY?: number) => {
+      if (!swipeStartRef.current) return;
+      const endX = clientX ?? swipeStartRef.current.lastX;
+      const endY = clientY ?? swipeStartRef.current.lastY;
+      const deltaX = endX - swipeStartRef.current.x;
+      const deltaY = endY - swipeStartRef.current.y;
+      swipeStartRef.current = null;
+      const direction = swipeDirection(deltaX, deltaY, window.innerWidth);
+      if (!direction) return;
+      moveTab(direction);
+    };
+
+    const handleTouchStart = (event: TouchEvent) => {
+      if (window.innerWidth > 720) return;
+      if (!canStartSwipe(event.target)) return;
+      const touch = event.touches[0];
+      if (!touch) return;
+      startSwipe(touch.clientX, touch.clientY);
+    };
+
+    const handleTouchMove = (event: TouchEvent) => {
+      const touch = event.touches[0];
+      if (!touch) return;
+      updateSwipe(touch.clientX, touch.clientY);
+    };
+
+    const handleTouchEnd = (event: TouchEvent) => {
+      const touch = event.changedTouches[0];
+      finishSwipe(touch?.clientX, touch?.clientY);
+    };
+
+    const handleTouchCancel = () => {
+      swipeStartRef.current = null;
+    };
+
+    document.addEventListener("touchstart", handleTouchStart, { capture: true, passive: true });
+    document.addEventListener("touchmove", handleTouchMove, { capture: true, passive: true });
+    document.addEventListener("touchend", handleTouchEnd, { capture: true, passive: true });
+    document.addEventListener("touchcancel", handleTouchCancel, { capture: true, passive: true });
+
+    return () => {
+      document.removeEventListener("touchstart", handleTouchStart, true);
+      document.removeEventListener("touchmove", handleTouchMove, true);
+      document.removeEventListener("touchend", handleTouchEnd, true);
+      document.removeEventListener("touchcancel", handleTouchCancel, true);
+    };
+  }, []);
+
   async function submitHomeText(event?: FormEvent) {
     event?.preventDefault();
     if (!text.trim()) return;

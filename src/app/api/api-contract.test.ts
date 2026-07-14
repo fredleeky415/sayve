@@ -326,6 +326,40 @@ describe("API contract", () => {
     );
   });
 
+  it("still captures supplied receipt notes and voice transcripts when required media storage is temporarily unavailable", async () => {
+    process.env.SAYVE_REQUIRE_MEDIA_STORAGE = "1";
+    delete process.env.SUPABASE_MEDIA_BUCKET;
+
+    const receiptForm = new FormData();
+    receiptForm.set("file", new File(["fake image"], "receipt.png", { type: "image/png" }));
+    receiptForm.set("note", "自己食晏 128");
+    const receipt = await responseJson(await postReceiptCapture(multipartRequest("http://sayve.test/api/captures/receipt", receiptForm)));
+
+    expectApiEnvelope(receipt);
+    expect(receipt.needs_user_input).toBe(false);
+    expect((receipt.data as { capture?: { rawText?: string; fileRefs?: string[]; metadata?: { mediaStored?: boolean; mediaStorageReason?: string } } }).capture).toMatchObject({
+      rawText: "自己食晏 128",
+      fileRefs: ["receipt.png"],
+      metadata: expect.objectContaining({ mediaStored: false, mediaStorageReason: "capture_media_bucket_not_configured" })
+    });
+
+    const voiceForm = new FormData();
+    voiceForm.set("file", new File(["fake audio"], "voice.webm", { type: "audio/webm" }));
+    voiceForm.set("transcript", "OK 買野飲 28");
+    const voice = await responseJson(await postVoiceCapture(multipartRequest("http://sayve.test/api/captures/voice", voiceForm)));
+
+    expectApiEnvelope(voice);
+    expect(voice.needs_user_input).toBe(false);
+    expect((voice.data as { capture?: { fileRefs?: string[]; metadata?: { mediaStored?: boolean; mediaStorageReason?: string; cleanedTranscript?: string } } }).capture).toMatchObject({
+      fileRefs: ["voice.webm"],
+      metadata: expect.objectContaining({
+        mediaStored: false,
+        mediaStorageReason: "capture_media_bucket_not_configured",
+        cleanedTranscript: "OK 買野飲 28"
+      })
+    });
+  });
+
   it("returns stable 413 envelopes for oversized required receipt and voice uploads", async () => {
     process.env.SAYVE_REQUIRE_MEDIA_STORAGE = "1";
     process.env.SUPABASE_MEDIA_BUCKET = "sayve-capture-media";

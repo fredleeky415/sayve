@@ -11,97 +11,113 @@ export async function POST(request: Request) {
   try {
     const contentType = request.headers.get("content-type") ?? "";
     if (contentType.includes("multipart/form-data")) {
-    const authBeforeUpload =
-      isSupabaseAuthRequired() && (!requestHasSupabaseBearerToken(request) || requestHouseholdHeaderId(request))
-        ? await resolveRequestAuthContext(request)
-        : undefined;
-    if (authBeforeUpload && !authBeforeUpload.ok) return authBeforeUpload.response;
+      const authBeforeUpload =
+        isSupabaseAuthRequired() && (!requestHasSupabaseBearerToken(request) || requestHouseholdHeaderId(request))
+          ? await resolveRequestAuthContext(request)
+          : undefined;
+      if (authBeforeUpload && !authBeforeUpload.ok) return authBeforeUpload.response;
 
-    const form = await request.formData();
-    const file = form.get("file");
-    const auth = authBeforeUpload ?? (await resolveRequestAuthContext(request, String(form.get("householdId") ?? "") || undefined));
-    if (!auth.ok) return auth.response;
-    const householdId = auth.context.householdId;
-    const storedFile = file instanceof File ? await storeCaptureFile({ householdId, sourceType: "voice", file }) : undefined;
-    const suppliedTranscriptRaw = String(form.get("transcript") ?? "").trim();
-    const suppliedTranscript = suppliedTranscriptRaw ? normalizeVoiceTranscript(suppliedTranscriptRaw) : "";
-    const transcriptionStartedAt = !suppliedTranscript && file instanceof File && !audioTranscriptionUnavailableReason(file) ? Date.now() : undefined;
-    const transcription = !suppliedTranscript && file instanceof File ? await transcribeAudio(file) : undefined;
-    const transcript = suppliedTranscript || transcription?.transcript || "Voice captured";
-    let mediaTelemetry: Parameters<typeof recordAiTelemetryAsync>[0] | undefined;
-    if (transcription && file instanceof File) {
-      mediaTelemetry = {
-        householdId,
-        phase: "speech_to_text",
-        model: transcription.model,
-        provider: "openai",
-        sourceType: "voice",
-        status: "success",
-        promptTokens: transcription.promptTokens,
-        completionTokens: transcription.completionTokens,
-        totalTokens: transcription.totalTokens,
-        estimatedCostUsd: transcription.estimatedCostUsd,
-        durationMs: transcription.durationMs,
-        metadata: {
-          fileName: file.name,
-          fileSize: file.size,
-          fileType: file.type,
-          rawTranscript: transcription.rawTranscript,
-          cleanedTranscript: transcription.transcript
+      const form = await request.formData();
+      const file = form.get("file");
+      const auth = authBeforeUpload ?? (await resolveRequestAuthContext(request, String(form.get("householdId") ?? "") || undefined));
+      if (!auth.ok) return auth.response;
+      const householdId = auth.context.householdId;
+      const suppliedTranscriptRaw = String(form.get("transcript") ?? "").trim();
+      const suppliedTranscript = suppliedTranscriptRaw ? normalizeVoiceTranscript(suppliedTranscriptRaw) : "";
+      const transcriptionStartedAt = !suppliedTranscript && file instanceof File && !audioTranscriptionUnavailableReason(file) ? Date.now() : undefined;
+      const transcription = !suppliedTranscript && file instanceof File ? await transcribeAudio(file) : undefined;
+      const transcript = suppliedTranscript || transcription?.transcript || "Voice captured";
+
+      let storedFile: Awaited<ReturnType<typeof storeCaptureFile>> | undefined;
+      let mediaStorageReason: string | undefined;
+      if (file instanceof File) {
+        try {
+          storedFile = await storeCaptureFile({ householdId, sourceType: "voice", file });
+          mediaStorageReason = storedFile.reason;
+        } catch (error) {
+          if (error instanceof CaptureMediaStorageError) {
+            if (error.status === 413) throw error;
+            mediaStorageReason = error.code;
+          } else {
+            throw error;
+          }
         }
-      };
-    }
-    if (!transcription && file instanceof File && !suppliedTranscript) {
-      const unavailableReason = audioTranscriptionUnavailableReason(file);
-      mediaTelemetry = {
+      }
+
+      let mediaTelemetry: Parameters<typeof recordAiTelemetryAsync>[0] | undefined;
+      if (transcription && file instanceof File) {
+        mediaTelemetry = {
+          householdId,
+          phase: "speech_to_text",
+          model: transcription.model,
+          provider: "openai",
+          sourceType: "voice",
+          status: "success",
+          promptTokens: transcription.promptTokens,
+          completionTokens: transcription.completionTokens,
+          totalTokens: transcription.totalTokens,
+          estimatedCostUsd: transcription.estimatedCostUsd,
+          durationMs: transcription.durationMs,
+          metadata: {
+            fileName: file.name,
+            fileSize: file.size,
+            fileType: file.type,
+            rawTranscript: transcription.rawTranscript,
+            cleanedTranscript: transcription.transcript
+          }
+        };
+      }
+      if (!transcription && file instanceof File && !suppliedTranscript) {
+        const unavailableReason = audioTranscriptionUnavailableReason(file);
+        mediaTelemetry = {
+          householdId,
+          phase: "speech_to_text",
+          model: aiModels.speechToText,
+          provider: process.env.OPENAI_API_KEY ? "openai" : "system",
+          sourceType: "voice",
+          status: unavailableReason ? "fallback" : "error",
+          promptTokens: 0,
+          completionTokens: 0,
+          totalTokens: 0,
+          estimatedCostUsd: 0,
+          durationMs: transcriptionStartedAt ? Math.max(1, Date.now() - transcriptionStartedAt) : 0,
+          metadata: {
+            reason: "speech_to_text_unavailable",
+            unavailableReason: unavailableReason ?? "speech_to_text_provider_error",
+            fileName: file.name,
+            fileSize: file.size,
+            fileType: file.type,
+            openaiConfigured: Boolean(process.env.OPENAI_API_KEY)
+          }
+        };
+      }
+      const result = await captureMemory({
         householdId,
-        phase: "speech_to_text",
-        model: aiModels.speechToText,
-        provider: process.env.OPENAI_API_KEY ? "openai" : "system",
+        actorUserId: auth.context.userId,
         sourceType: "voice",
-        status: unavailableReason ? "fallback" : "error",
-        promptTokens: 0,
-        completionTokens: 0,
-        totalTokens: 0,
-        estimatedCostUsd: 0,
-        durationMs: transcriptionStartedAt ? Math.max(1, Date.now() - transcriptionStartedAt) : 0,
+        transcript,
+        fileRefs: file instanceof File ? [storedFile?.ref ?? file.name] : [],
         metadata: {
-          reason: "speech_to_text_unavailable",
-          unavailableReason: unavailableReason ?? "speech_to_text_provider_error",
-          fileName: file.name,
-          fileSize: file.size,
-          fileType: file.type,
-          openaiConfigured: Boolean(process.env.OPENAI_API_KEY)
-        }
-      };
-    }
-    const result = await captureMemory({
-      householdId,
-      actorUserId: auth.context.userId,
-      sourceType: "voice",
-      transcript,
-      fileRefs: storedFile ? [storedFile.ref] : [],
-      metadata: {
-        fileName: file instanceof File ? file.name : undefined,
-        mediaStorageRef: storedFile?.ref,
-        mediaStorageBucket: storedFile?.bucket,
-        mediaStoragePath: storedFile?.path,
-        mediaStored: storedFile?.stored,
-        mediaStorageReason: storedFile?.reason,
-        speechToTextModel: transcription?.model,
-        speechToTextStatus: transcription ? "transcribed" : suppliedTranscript ? "provided" : "not_available",
+          fileName: file instanceof File ? file.name : undefined,
+          mediaStorageRef: storedFile?.ref,
+          mediaStorageBucket: storedFile?.bucket,
+          mediaStoragePath: storedFile?.path,
+          mediaStored: storedFile?.stored ?? false,
+          mediaStorageReason,
+          speechToTextModel: transcription?.model,
+          speechToTextStatus: transcription ? "transcribed" : suppliedTranscript ? "provided" : "not_available",
           rawTranscript: transcription?.rawTranscript ?? (suppliedTranscriptRaw || undefined),
           cleanedTranscript: transcription?.transcript ?? (suppliedTranscript || undefined),
-        authSource: auth.context.source
-      }
-    });
-    if (mediaTelemetry) {
-      await recordAiTelemetryAsync({
-        ...mediaTelemetry,
-        captureId: result.data.capture?.id,
-        memoryObjectId: result.memory_object_id ?? undefined
+          authSource: auth.context.source
+        }
       });
-    }
+      if (mediaTelemetry) {
+        await recordAiTelemetryAsync({
+          ...mediaTelemetry,
+          captureId: result.data.capture?.id,
+          memoryObjectId: result.memory_object_id ?? undefined
+        });
+      }
       return noStoreJson(result);
     }
 

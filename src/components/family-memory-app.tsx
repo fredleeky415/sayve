@@ -118,7 +118,7 @@ export function shouldBlockSwipeStart(target: EventTarget | null, activeElement?
   if (targetElement?.closest("button, select, a, [data-sayve-no-swipe='true']")) return true;
 
   const currentActive = activeElement as HTMLElement | null;
-  if (currentActive?.matches("input, textarea, [contenteditable='true']")) return true;
+  if (currentActive?.matches("input, textarea, [contenteditable='true']") && targetElement && currentActive.contains(targetElement)) return true;
 
   return false;
 }

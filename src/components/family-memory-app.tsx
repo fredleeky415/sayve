@@ -50,6 +50,7 @@ type VoiceStatus = "idle" | "recording" | "ready";
 type HouseholdOption = { id: string; name: string; role: string };
 type InitStep = 0 | 1 | 2;
 type RecordedVoice = { blob: Blob; fileName: string; mimeType: string };
+type InitialInviteState = { email: string; link: string; householdName: string };
 const tabOrder: Tab[] = ["chat", "home", "dashboard"];
 const transientApiStates = new Set(["temporary_unavailable"]);
 
@@ -219,6 +220,8 @@ export function FamilyMemoryApp() {
   const [initName, setInitName] = useState("Family Memory");
   const [initCurrency, setInitCurrency] = useState("HKD");
   const [initInviteMode, setInitInviteMode] = useState<"solo" | "partner">("solo");
+  const [initPartnerEmail, setInitPartnerEmail] = useState("");
+  const [initialInviteState, setInitialInviteState] = useState<InitialInviteState | null>(null);
   const [initBusy, setInitBusy] = useState(false);
   const swipeStartRef = useRef<{ x: number; y: number; lastX: number; lastY: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -444,26 +447,28 @@ export function FamilyMemoryApp() {
     clearStoredBrowserAuth({ household: true });
   }
 
-  async function inviteHouseholdMember() {
-    setAuthMessage("");
-    setInviteLink("");
-    setInviteCopied(false);
-    const email = inviteEmail.trim();
-    if (!email) {
-      setAuthMessage("輸入太太 email 先可以建立 invite。");
-      return;
+  async function createHouseholdInviteLink(input?: { email?: string; householdId?: string; quiet?: boolean }) {
+    const email = input?.email?.trim() ?? inviteEmail.trim();
+    const householdId = input?.householdId?.trim() ?? selectedHouseholdId;
+    if (!input?.quiet) {
+      setAuthMessage("");
+      setInviteLink("");
+      setInviteCopied(false);
     }
-    if (!selectedHouseholdId) {
-      setAuthMessage("請先選擇家庭。");
-      return;
+    if (!email) {
+      if (!input?.quiet) setAuthMessage("輸入太太 email 先可以建立 invite。");
+      return { ok: false as const, error: "invite_email_required" };
+    }
+    if (!householdId) {
+      if (!input?.quiet) setAuthMessage("請先選擇家庭。");
+      return { ok: false as const, error: "household_required" };
     }
 
-    setInviteBusy(true);
     try {
       const response = await fetch("/api/households/members/invite", {
         method: "POST",
         headers: { "content-type": "application/json", ...storedAuthHeaders() },
-        body: JSON.stringify({ email, role: "member" })
+        body: JSON.stringify({ householdId, email, role: "member" })
       });
       const result = (await response.json()) as {
         ok?: boolean;
@@ -471,16 +476,28 @@ export function FamilyMemoryApp() {
         data?: { inviteUrl?: string; privateBetaInviteUrl?: string };
       };
       if (!response.ok || !result.ok) {
-        setAuthMessage(result.error ?? "暫時建立唔到邀請。");
-        return;
+        if (!input?.quiet) setAuthMessage(result.error ?? "暫時建立唔到邀請。");
+        return { ok: false as const, error: result.error ?? "invite_create_failed" };
       }
 
       const link = result.data?.privateBetaInviteUrl ?? result.data?.inviteUrl ?? "";
-      setInviteLink(link);
-      setInviteCopied(false);
-      setAuthMessage(link ? "Invite link 已準備好。" : "Invite 已建立。");
+      if (!input?.quiet) {
+        setInviteLink(link);
+        setInviteCopied(false);
+        setAuthMessage(link ? "Invite link 已準備好。" : "Invite 已建立。");
+      }
+      return { ok: true as const, link };
     } catch {
-      setAuthMessage("暫時建立唔到邀請。");
+      if (!input?.quiet) setAuthMessage("暫時建立唔到邀請。");
+      return { ok: false as const, error: "invite_create_failed" };
+    }
+  }
+
+  async function inviteHouseholdMember() {
+    setInviteBusy(true);
+    try {
+      const created = await createHouseholdInviteLink();
+      if (!created.ok) return;
     } finally {
       setInviteBusy(false);
     }
@@ -502,6 +519,7 @@ export function FamilyMemoryApp() {
     if (!session?.accessToken) return;
     setInitBusy(true);
     setAuthMessage("");
+    setInitialInviteState(null);
     try {
       const response = await fetch("/api/households/bootstrap", {
         method: "POST",
@@ -523,6 +541,26 @@ export function FamilyMemoryApp() {
       }
       setHouseholds([result.household]);
       setSelectedHouseholdId(result.household.id);
+      if (initInviteMode === "partner" && initPartnerEmail.trim()) {
+        const created = await createHouseholdInviteLink({
+          email: initPartnerEmail,
+          householdId: result.household.id,
+          quiet: true
+        });
+        if (created.ok) {
+          setInviteEmail(initPartnerEmail.trim());
+          setInviteLink(created.link);
+          setInviteCopied(false);
+          setInitialInviteState({
+            email: initPartnerEmail.trim(),
+            link: created.link,
+            householdName: result.household.name
+          });
+          setAuthOpen(false);
+          setAuthMessage("");
+          return;
+        }
+      }
       setAuthOpen(false);
       setInitStep(0);
       setAuthMessage(initInviteMode === "partner" ? "家庭已開好，下一步可以邀請另一位成員。" : "");
@@ -1069,6 +1107,50 @@ export function FamilyMemoryApp() {
           <div className="initializationShell">
             <div className="initializationAura" aria-hidden="true" />
             <div className="initializationCard">
+              {initialInviteState ? (
+                <div className="initializationStep">
+                  <p className="initializationEyebrow">Sayve</p>
+                  <h2>家庭已開好，invite 都準備埋</h2>
+                  <span>{initialInviteState.householdName} 已建立。將條 link 俾另一位成員登入，就可以一齊寫入同一份家庭記憶。</span>
+                  <div className="initializationInviteCard">
+                    <strong>{initialInviteState.email}</strong>
+                    <small>已為呢個 email 準備 member invite。</small>
+                  </div>
+                  <div className="initializationActions">
+                    <button
+                      type="button"
+                      className="initializationGhost"
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(initialInviteState.link);
+                          setInviteCopied(true);
+                          setAuthMessage("Invite link 已複製。");
+                        } catch {
+                          setAuthMessage("暫時未複製到，先用開啟 invite link。");
+                        }
+                      }}
+                    >
+                      {inviteCopied ? "已複製" : "複製 invite link"}
+                    </button>
+                    <a className="initializationPrimary" href={initialInviteState.link} target="_blank" rel="noreferrer">
+                      開啟 invite
+                    </a>
+                  </div>
+                  <button
+                    type="button"
+                    className="initializationDone"
+                    onClick={() => {
+                      setInitialInviteState(null);
+                      setInitStep(0);
+                      setAuthMessage("家庭已開好，之後都可以喺右上角邀請另一位成員。");
+                    }}
+                  >
+                    我之後再處理
+                  </button>
+                  {authMessage && <p className="initializationMessage">{authMessage}</p>}
+                </div>
+              ) : (
+                <>
               <div className="initializationDots" aria-hidden="true">
                 <span className={initStep === 0 ? "active" : ""} />
                 <span className={initStep === 1 ? "active" : ""} />
@@ -1123,6 +1205,12 @@ export function FamilyMemoryApp() {
                       <small>家庭開好之後，我會引導你邀請對方加入。</small>
                     </button>
                   </div>
+                  {initInviteMode === "partner" && (
+                    <label className="initializationField">
+                      <span>另一位成員 email</span>
+                      <input value={initPartnerEmail} onChange={(event) => setInitPartnerEmail(event.target.value)} placeholder="wife@example.com" />
+                    </label>
+                  )}
                 </div>
               )}
 
@@ -1147,6 +1235,8 @@ export function FamilyMemoryApp() {
               </div>
 
               {authMessage && <p className="initializationMessage">{authMessage}</p>}
+                </>
+              )}
             </div>
           </div>
         </section>

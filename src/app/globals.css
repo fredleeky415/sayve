@@ -1106,6 +1106,26 @@ b {
   line-height: 1.5;
 }
 
+.initializationInviteCard {
+  display: grid;
+  gap: 6px;
+  padding: 16px 18px;
+  border: 1px solid rgba(220, 255, 249, 0.18);
+  border-radius: 20px;
+  background: rgba(220, 255, 249, 0.05);
+}
+
+.initializationInviteCard strong {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.initializationInviteCard small {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .initializationActions {
   display: flex;
   align-items: center;
@@ -1137,6 +1157,15 @@ b {
   margin: 0;
   color: #f9c7a6;
   font-size: 14px;
+}
+
+.initializationDone {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  color: #b3bcc8;
+  background: transparent;
+  font-size: 13px;
 }
 
 @keyframes onboardingLift {

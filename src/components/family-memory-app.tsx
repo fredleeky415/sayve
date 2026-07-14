@@ -773,7 +773,7 @@ export function FamilyMemoryApp() {
     const deltaY = endY - swipeStartRef.current.y;
     swipeStartRef.current = null;
     if (window.innerWidth > 720) return;
-    if (Math.abs(deltaX) < 48 || Math.abs(deltaY) > Math.abs(deltaX) * 0.95) return;
+    if (Math.abs(deltaX) < 32 || Math.abs(deltaY) > Math.abs(deltaX) * 1.15) return;
     moveTab(deltaX > 0 ? -1 : 1);
   }
 
@@ -984,33 +984,33 @@ export function FamilyMemoryApp() {
   return (
     <main
       className="appShell"
-      onPointerDown={(event) => {
+      onPointerDownCapture={(event) => {
         if (!canStartSwipe(event.target)) return;
         if (window.innerWidth > 720) return;
         startSwipe(event.clientX, event.clientY);
       }}
-      onPointerMove={(event) => updateSwipe(event.clientX, event.clientY)}
-      onPointerUp={(event) => handlePointerUp(event.clientX, event.clientY)}
-      onPointerCancel={() => {
+      onPointerMoveCapture={(event) => updateSwipe(event.clientX, event.clientY)}
+      onPointerUpCapture={(event) => handlePointerUp(event.clientX, event.clientY)}
+      onPointerCancelCapture={() => {
         swipeStartRef.current = null;
       }}
-      onTouchStart={(event) => {
+      onTouchStartCapture={(event) => {
         if (!canStartSwipe(event.target)) return;
         if (window.innerWidth > 720) return;
         const touch = event.touches[0];
         if (!touch) return;
         startSwipe(touch.clientX, touch.clientY);
       }}
-      onTouchMove={(event) => {
+      onTouchMoveCapture={(event) => {
         const touch = event.touches[0];
         if (!touch) return;
         updateSwipe(touch.clientX, touch.clientY);
       }}
-      onTouchEnd={(event) => {
+      onTouchEndCapture={(event) => {
         const touch = event.changedTouches[0];
         handlePointerUp(touch?.clientX, touch?.clientY);
       }}
-      onTouchCancel={() => {
+      onTouchCancelCapture={() => {
         swipeStartRef.current = null;
       }}
     >

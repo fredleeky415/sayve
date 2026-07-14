@@ -113,6 +113,10 @@ export function swipeDirection(deltaX: number, deltaY: number, viewportWidth: nu
   return deltaX > 0 ? -1 : 1;
 }
 
+export function shouldShowInitialization(accessToken: string | null | undefined, householdsResolved: boolean, householdCount: number, authMessage: string) {
+  return Boolean(accessToken) && householdsResolved && householdCount === 0 && authMessage === "呢個帳戶未加入任何家庭。";
+}
+
 async function pause(ms: number) {
   await new Promise((resolve) => window.setTimeout(resolve, ms));
 }
@@ -237,6 +241,7 @@ export function FamilyMemoryApp() {
   const [households, setHouseholds] = useState<HouseholdOption[]>([]);
   const [selectedHouseholdId, setSelectedHouseholdId] = useState("");
   const [householdStatus, setHouseholdStatus] = useState<HouseholdStatus | null>(null);
+  const [householdsResolved, setHouseholdsResolved] = useState(false);
   const [prototypeUserId, setPrototypeUserId] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteLink, setInviteLink] = useState("");
@@ -349,12 +354,14 @@ export function FamilyMemoryApp() {
     setHouseholds([]);
     setSelectedHouseholdId("");
     setHouseholdStatus(null);
+    setHouseholdsResolved(false);
     setInviteLink("");
     setInviteEmail("");
   }, [prototypeUserId, session?.accessToken]);
 
   async function refreshHouseholds() {
     if (!session?.accessToken && !prototypeUserId) return;
+    setHouseholdsResolved(false);
     let finalStatus = 0;
     let result: { households?: HouseholdOption[]; error?: string } = {};
 
@@ -374,11 +381,13 @@ export function FamilyMemoryApp() {
             ? "家庭資料暫時未連上，Sayve 先保留你而家個家庭。"
             : result.error ?? "暫時讀唔到家庭。";
       if (shouldPreserveHouseholdsOnRefreshFailure(households, result.error, finalStatus)) {
+        setHouseholdsResolved(true);
         setAuthMessage(nextMessage);
         return;
       }
       setHouseholds([]);
       setSelectedHouseholdId("");
+      setHouseholdsResolved(true);
       setAuthMessage(nextMessage);
       return;
     }
@@ -388,10 +397,12 @@ export function FamilyMemoryApp() {
     if (nextHouseholds.length === 0) {
       setSelectedHouseholdId("");
       setHouseholdStatus(null);
+      setHouseholdsResolved(true);
       setAuthMessage(session?.accessToken ? "呢個帳戶未加入任何家庭。" : "");
       return;
     }
 
+    setHouseholdsResolved(true);
     setAuthMessage("");
     if (nextHouseholds.length > 0 && !nextHouseholds.some((household) => household.id === selectedHouseholdId)) {
       setSelectedHouseholdId(nextHouseholds[0].id);
@@ -695,7 +706,7 @@ export function FamilyMemoryApp() {
     return `${minutes}:${String(rest).padStart(2, "0")}`;
   }
 
-  const needsInitialization = Boolean(session?.accessToken) && households.length === 0;
+  const needsInitialization = shouldShowInitialization(session?.accessToken, householdsResolved, households.length, authMessage);
 
   async function startVoiceStub() {
     if (voiceStatus === "recording") return;
@@ -1430,6 +1441,7 @@ export function FamilyMemoryApp() {
           <div className="heroPrompt">
             <p>Sayve</p>
             <h1>跟 Sayve 說一件事</h1>
+            {session?.accessToken && !householdsResolved ? <span className="roleHint">正在準備你嘅家庭記憶...</span> : null}
             {!selectedHouseholdCanWrite && selectedHousehold ? <span className="roleHint">你而家用緊只讀模式，可以問 Sayve，但未可以記低。</span> : null}
           </div>
 
@@ -1576,6 +1588,7 @@ export function FamilyMemoryApp() {
           <div className="heroPrompt">
             <p>Ask</p>
             <h1>問一問 Sayve</h1>
+            {session?.accessToken && !householdsResolved ? <span>正在準備你嘅家庭記憶...</span> : null}
             <span>
               {selectedHouseholdCanWrite
                 ? "可以問家庭財務狀況，也可以直接講一件新發生的事。"

@@ -21,7 +21,8 @@ const mockState = vi.hoisted(() => ({
   snapshots: [] as SnapshotRow[],
   nextHouseholdId: 1,
   nextInviteId: 1,
-  inviteRoleOverride: undefined as string | undefined
+  inviteRoleOverride: undefined as string | undefined,
+  snapshotUpsertError: undefined as string | undefined
 }));
 
 function expectOkResult(result: HouseholdOnboardingResult): asserts result is Extract<HouseholdOnboardingResult, { configured: true }> & {
@@ -136,6 +137,9 @@ vi.mock("@/server/supabase/service-client", () => ({
             }
           }
           if (table === "memory_store_snapshots") {
+            if (mockState.snapshotUpsertError) {
+              return Promise.resolve({ error: { message: mockState.snapshotUpsertError } });
+            }
             const existing = mockState.snapshots.find((snapshot) => snapshot.household_id === row.household_id);
             if (existing) {
               existing.state = row.state;
@@ -237,6 +241,7 @@ describe("household onboarding", () => {
     mockState.nextHouseholdId = 1;
     mockState.nextInviteId = 1;
     mockState.inviteRoleOverride = undefined;
+    mockState.snapshotUpsertError = undefined;
   });
 
   it("creates a founder household with an owner member and initialized memory snapshot", async () => {
@@ -257,6 +262,31 @@ describe("household onboarding", () => {
       }
     ]);
     expect(mockState.snapshots).toEqual([expect.objectContaining({ household_id: "household_1", state: {} })]);
+  });
+
+  it("fails founder household creation when the memory snapshot cannot initialize", async () => {
+    const { createFounderHousehold } = await import("./onboarding");
+    mockState.snapshotUpsertError = "snapshot write denied";
+
+    const result = await createFounderHousehold({
+      name: "Lee Home",
+      ownerUserId: "00000000-0000-0000-0000-000000000001"
+    });
+
+    expect(result).toMatchObject({
+      configured: true,
+      ok: false,
+      error: "snapshot write denied",
+      errorCode: "household_snapshot_init_failed"
+    });
+    expect(mockState.members).toEqual([
+      {
+        household_id: "household_1",
+        user_id: "00000000-0000-0000-0000-000000000001",
+        role: "owner"
+      }
+    ]);
+    expect(mockState.snapshots).toEqual([]);
   });
 
   it("creates and accepts a partner member invite into the same household", async () => {

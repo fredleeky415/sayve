@@ -5,6 +5,7 @@ export type HouseholdOnboardingErrorCode =
   | "supabase_not_configured"
   | "household_create_failed"
   | "household_member_create_failed"
+  | "household_snapshot_init_failed"
   | "invite_create_failed"
   | "invite_not_found"
   | "invite_already_accepted"
@@ -115,7 +116,7 @@ export async function createFounderHousehold(input: {
     return { configured: true, ok: false, error: memberError.message, errorCode: "household_member_create_failed", data: { household } };
   }
 
-  await supabase.from("memory_store_snapshots").upsert(
+  const { error: snapshotError } = await supabase.from("memory_store_snapshots").upsert(
     {
       household_id: household.id,
       state: {},
@@ -123,6 +124,16 @@ export async function createFounderHousehold(input: {
     },
     { onConflict: "household_id" }
   );
+
+  if (snapshotError) {
+    return {
+      configured: true,
+      ok: false,
+      error: snapshotError.message,
+      errorCode: "household_snapshot_init_failed",
+      data: { household }
+    };
+  }
 
   return {
     configured: true,

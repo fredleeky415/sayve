@@ -118,9 +118,8 @@ export function shouldBlockSwipeStart(target: EventTarget | null, activeElement?
   if (targetElement?.closest("button, select, a, [data-sayve-no-swipe='true']")) return true;
 
   const currentActive = activeElement as HTMLElement | null;
-  if (currentActive?.matches("input, textarea, [contenteditable='true']") && targetElement && currentActive.contains(targetElement)) return true;
-
-  return false;
+  if (!currentActive?.matches("textarea, [contenteditable='true']") || !targetElement) return false;
+  return currentActive.contains(targetElement);
 }
 
 export function shouldShowInitialization(accessToken: string | null | undefined, householdsResolved: boolean, householdCount: number, authMessage: string) {

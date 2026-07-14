@@ -119,6 +119,11 @@ function monthLabel(month: string) {
   return `${year}年${Number(monthNumber)}月`;
 }
 
+export function shouldRefreshDashboardOnReturn(eventName: "focus" | "visibilitychange", visibilityState?: DocumentVisibilityState) {
+  if (eventName === "focus") return true;
+  return visibilityState === "visible";
+}
+
 function shortMonthLabel(month: string) {
   const monthIndex = Number(month.split("-")[1]) - 1;
   const labels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -265,8 +270,24 @@ export function DashboardView() {
       void refreshDashboard();
     };
 
+    const handleReturnRefresh = () => {
+      if (!shouldRefreshDashboardOnReturn("focus")) return;
+      void refreshDashboard();
+    };
+
+    const handleVisibilityRefresh = () => {
+      if (!shouldRefreshDashboardOnReturn("visibilitychange", document.visibilityState)) return;
+      void refreshDashboard();
+    };
+
     window.addEventListener("sayve:memory-changed", handleMemoryChanged);
-    return () => window.removeEventListener("sayve:memory-changed", handleMemoryChanged);
+    window.addEventListener("focus", handleReturnRefresh);
+    document.addEventListener("visibilitychange", handleVisibilityRefresh);
+    return () => {
+      window.removeEventListener("sayve:memory-changed", handleMemoryChanged);
+      window.removeEventListener("focus", handleReturnRefresh);
+      document.removeEventListener("visibilitychange", handleVisibilityRefresh);
+    };
   }, [refreshDashboard]);
 
   async function addCategory(event: FormEvent) {

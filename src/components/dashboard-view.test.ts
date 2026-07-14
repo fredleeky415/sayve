@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { looksLikeUuid, ownershipLabel, readableMemberLabel } from "./dashboard-view";
+import { looksLikeUuid, ownershipLabel, readableMemberLabel, shouldRefreshDashboardOnReturn } from "./dashboard-view";
 
 describe("dashboard ownership labels", () => {
   it("treats raw auth uuids as implementation detail instead of user-facing labels", () => {
@@ -46,5 +46,11 @@ describe("dashboard ownership labels", () => {
         assignedMember: "partner"
       })
     ).toBe("另一位成員 自己");
+  });
+
+  it("refreshes dashboard when the app returns to the foreground", () => {
+    expect(shouldRefreshDashboardOnReturn("focus")).toBe(true);
+    expect(shouldRefreshDashboardOnReturn("visibilitychange", "visible")).toBe(true);
+    expect(shouldRefreshDashboardOnReturn("visibilitychange", "hidden")).toBe(false);
   });
 });

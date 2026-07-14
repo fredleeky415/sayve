@@ -146,6 +146,7 @@ export async function POST(request: Request) {
         { status: error.status }
       );
     }
+    console.error("[api/captures/receipt] unexpected failure", error);
     return unexpectedApiErrorResponse();
   }
 }

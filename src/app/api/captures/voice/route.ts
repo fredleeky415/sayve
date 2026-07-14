@@ -143,6 +143,7 @@ export async function POST(request: Request) {
         { status: error.status }
       );
     }
+    console.error("[api/captures/voice] unexpected failure", error);
     return unexpectedApiErrorResponse();
   }
 }

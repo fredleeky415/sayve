@@ -19,7 +19,8 @@ export async function POST(request: Request) {
 
     const result = await askConversation(typeof body.question === "string" ? body.question : "", auth.context.householdId, auth.context.userId);
     return noStoreJson(result);
-  } catch {
+  } catch (error) {
+    console.error("[api/conversation/ask] unexpected failure", error);
     return unexpectedApiErrorResponse();
   }
 }

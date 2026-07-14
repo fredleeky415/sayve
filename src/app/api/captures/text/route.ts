@@ -28,7 +28,8 @@ export async function POST(request: Request) {
     });
 
     return noStoreJson(result);
-  } catch {
+  } catch (error) {
+    console.error("[api/captures/text] unexpected failure", error);
     return unexpectedApiErrorResponse();
   }
 }

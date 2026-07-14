@@ -680,7 +680,7 @@ export function FamilyMemoryApp() {
     setBusy(true);
     try {
       const result = shouldAsk
-        ? await postJson("/api/conversation/ask", { question: typedText })
+        ? await postJson("/api/conversation/ask", { question: typedText, householdId: selectedHouseholdId })
         : voiceFile
           ? await uploadVoiceBlob(voiceFile, undefined, selectedHouseholdId)
           : await postJson("/api/captures/voice", { transcript: prompt, householdId: selectedHouseholdId });

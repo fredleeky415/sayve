@@ -134,11 +134,29 @@ function groupMonthlyFacts(facts: Dashboard["monthlyFacts"]) {
   }, []);
 }
 
+function looksLikeUuid(value: string | undefined) {
+  return Boolean(value && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value));
+}
+
+function readableMemberLabel(value: string | undefined) {
+  if (!value) return "";
+  if (value === "actor") return "自己";
+  if (value === "partner") return "另一位成員";
+  if (looksLikeUuid(value)) return "";
+  return value;
+}
+
 function ownershipLabel(fact: Dashboard["monthlyFacts"][number]) {
   if ((fact.ownershipScope ?? "shared") === "shared") return "公家";
-  if (fact.assignedMember === "actor") return fact.createdBy ? `${fact.createdBy} 自己` : "個人";
-  if (fact.assignedMember) return `${fact.assignedMember} 自己`;
-  return fact.createdBy ? `${fact.createdBy} 自己` : "個人";
+  if (fact.assignedMember === "actor") return "自己";
+
+  const assignedMember = readableMemberLabel(fact.assignedMember);
+  if (assignedMember) return `${assignedMember} 自己`;
+
+  const createdBy = readableMemberLabel(fact.createdBy);
+  if (createdBy) return `${createdBy} 自己`;
+
+  return "個人";
 }
 
 function calendarCells(month: string, days: Dashboard["daily"]) {

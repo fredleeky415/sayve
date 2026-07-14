@@ -2637,7 +2637,9 @@ b {
     overflow-x: auto;
     overflow-y: hidden;
     scroll-snap-type: x mandatory;
+    scroll-snap-stop: always;
     -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
     scrollbar-width: none;
   }
 
@@ -2646,13 +2648,16 @@ b {
   }
 
   .mobilePagerTrack {
-    width: max-content;
+    display: flex;
+    width: 300%;
     min-width: 300%;
     transition: none;
     will-change: auto;
   }
 
   .appPage {
+    width: calc(100% / 3);
+    flex: 0 0 calc(100% / 3);
     padding: 0 16px;
     scroll-snap-align: start;
   }

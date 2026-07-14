@@ -150,6 +150,6 @@ export async function POST(request: Request) {
       );
     }
     console.error("[api/captures/voice] unexpected failure", error);
-    return unexpectedApiErrorResponse();
+    return unexpectedApiErrorResponse(error, {}, { captureLabel: "voice" });
   }
 }

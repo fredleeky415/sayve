@@ -153,6 +153,6 @@ export async function POST(request: Request) {
       );
     }
     console.error("[api/captures/receipt] unexpected failure", error);
-    return unexpectedApiErrorResponse();
+    return unexpectedApiErrorResponse(error, {}, { captureLabel: "receipt" });
   }
 }

@@ -184,6 +184,7 @@ export function FamilyMemoryApp() {
   const [prototypeUserId, setPrototypeUserId] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteLink, setInviteLink] = useState("");
+  const [inviteCopied, setInviteCopied] = useState(false);
   const [inviteBusy, setInviteBusy] = useState(false);
   const [initStep, setInitStep] = useState<InitStep>(0);
   const [initName, setInitName] = useState("Family Memory");
@@ -404,6 +405,7 @@ export function FamilyMemoryApp() {
   async function inviteHouseholdMember() {
     setAuthMessage("");
     setInviteLink("");
+    setInviteCopied(false);
     const email = inviteEmail.trim();
     if (!email) {
       setAuthMessage("輸入太太 email 先可以建立 invite。");
@@ -433,11 +435,24 @@ export function FamilyMemoryApp() {
 
       const link = result.data?.privateBetaInviteUrl ?? result.data?.inviteUrl ?? "";
       setInviteLink(link);
+      setInviteCopied(false);
       setAuthMessage(link ? "Invite link 已準備好。" : "Invite 已建立。");
     } catch {
       setAuthMessage("暫時建立唔到邀請。");
     } finally {
       setInviteBusy(false);
+    }
+  }
+
+  async function copyInviteLink() {
+    if (!inviteLink) return;
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+      setInviteCopied(true);
+      setAuthMessage("Invite link 已複製。");
+    } catch {
+      setInviteCopied(false);
+      setAuthMessage("暫時未複製到，先用開啟 invite link。");
     }
   }
 
@@ -664,6 +679,10 @@ export function FamilyMemoryApp() {
     moveTab(deltaX > 0 ? -1 : 1);
   }
 
+  function canStartSwipe(target: EventTarget | null) {
+    return !((target as HTMLElement | null)?.closest("input, textarea, button, select, a"));
+  }
+
   async function submitHomeText(event?: FormEvent) {
     event?.preventDefault();
     if (!text.trim()) return;
@@ -836,12 +855,27 @@ export function FamilyMemoryApp() {
     <main
       className="appShell"
       onPointerDown={(event) => {
-        if ((event.target as HTMLElement).closest("input, textarea, button, select, a")) return;
+        if (!canStartSwipe(event.target)) return;
         if (window.innerWidth > 720) return;
         swipeStartRef.current = { x: event.clientX, y: event.clientY };
       }}
       onPointerUp={(event) => handlePointerUp(event.clientX, event.clientY)}
       onPointerCancel={() => {
+        swipeStartRef.current = null;
+      }}
+      onTouchStart={(event) => {
+        if (!canStartSwipe(event.target)) return;
+        if (window.innerWidth > 720) return;
+        const touch = event.touches[0];
+        if (!touch) return;
+        swipeStartRef.current = { x: touch.clientX, y: touch.clientY };
+      }}
+      onTouchEnd={(event) => {
+        const touch = event.changedTouches[0];
+        if (!touch) return;
+        handlePointerUp(touch.clientX, touch.clientY);
+      }}
+      onTouchCancel={() => {
         swipeStartRef.current = null;
       }}
     >
@@ -953,9 +987,14 @@ export function FamilyMemoryApp() {
                 </button>
               </div>
               {inviteLink && (
-                <a className="inviteMemberLink" href={inviteLink} target="_blank" rel="noreferrer">
-                  開啟 invite link
-                </a>
+                <div className="inviteMemberActions">
+                  <button type="button" className="authGhostButton" onClick={copyInviteLink}>
+                    {inviteCopied ? "已複製" : "複製 invite link"}
+                  </button>
+                  <a className="inviteMemberLink" href={inviteLink} target="_blank" rel="noreferrer">
+                    開啟 invite link
+                  </a>
+                </div>
               )}
             </div>
           )}

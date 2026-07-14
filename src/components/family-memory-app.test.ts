@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { conversationRequestBody, householdCanWrite, householdReadyForInteraction, shouldPreserveHouseholdsOnRefreshFailure, shouldRetryApiResult, shouldShowInitialization, swipeDirection } from "./family-memory-app";
+import { conversationRequestBody, householdCanWrite, householdReadyForInteraction, shouldPreserveHouseholdsOnRefreshFailure, shouldRefreshViewsAfterResult, shouldRetryApiResult, shouldShowInitialization, swipeDirection } from "./family-memory-app";
 
 describe("family memory app conversation routing", () => {
   it("always carries the selected household into ask requests", () => {
@@ -52,5 +52,13 @@ describe("family memory app conversation routing", () => {
     expect(householdReadyForInteraction("token", true, "")).toBe(false);
     expect(householdReadyForInteraction("token", true, "household_lee")).toBe(true);
     expect(householdReadyForInteraction(undefined, false, "")).toBe(true);
+  });
+
+  it("refreshes dashboard-facing views only after a successful non-review capture result", () => {
+    expect(shouldRefreshViewsAfterResult(null)).toBe(false);
+    expect(shouldRefreshViewsAfterResult({ current_state: "capture_received", needs_user_input: false } as never)).toBe(false);
+    expect(shouldRefreshViewsAfterResult({ current_state: "capture_failed", needs_user_input: true } as never)).toBe(false);
+    expect(shouldRefreshViewsAfterResult({ current_state: "active", needs_user_input: true } as never)).toBe(false);
+    expect(shouldRefreshViewsAfterResult({ current_state: "active", needs_user_input: false } as never)).toBe(true);
   });
 });

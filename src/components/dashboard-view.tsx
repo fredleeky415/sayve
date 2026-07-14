@@ -258,6 +258,17 @@ export function DashboardView() {
     void refreshDashboard();
   }, [refreshDashboard]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const handleMemoryChanged = () => {
+      void refreshDashboard();
+    };
+
+    window.addEventListener("sayve:memory-changed", handleMemoryChanged);
+    return () => window.removeEventListener("sayve:memory-changed", handleMemoryChanged);
+  }, [refreshDashboard]);
+
   async function addCategory(event: FormEvent) {
     event.preventDefault();
     const name = newCategory.trim();

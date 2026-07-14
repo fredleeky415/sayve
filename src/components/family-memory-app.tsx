@@ -123,6 +123,12 @@ export function householdReadyForInteraction(accessToken: string | null | undefi
   return Boolean(householdId);
 }
 
+export function shouldRefreshViewsAfterResult(result: ApiResult | null | undefined) {
+  if (!result) return false;
+  if (result.current_state === "capture_received" || result.current_state === "capture_failed") return false;
+  return !result.needs_user_input;
+}
+
 async function pause(ms: number) {
   await new Promise((resolve) => window.setTimeout(resolve, ms));
 }
@@ -276,6 +282,11 @@ export function FamilyMemoryApp() {
 
   function syncBrowserSession(nextSession: Parameters<typeof storeBrowserSession>[0]) {
     setSession(storeBrowserSession(nextSession));
+  }
+
+  function notifyMemoryViewsChanged(result: ApiResult | null | undefined) {
+    if (typeof window === "undefined" || !shouldRefreshViewsAfterResult(result)) return;
+    window.dispatchEvent(new CustomEvent("sayve:memory-changed", { detail: { householdId: selectedHouseholdId } }));
   }
 
   async function refreshHouseholdStatus(householdIdOverride?: string) {
@@ -934,6 +945,7 @@ export function FamilyMemoryApp() {
     try {
       const result = await postJson("/api/captures/text", { text: prompt, householdId: selectedHouseholdId });
       setLatest(result);
+      notifyMemoryViewsChanged(result);
     } catch {
       setLatest(captureFailedResult());
     } finally {
@@ -962,6 +974,7 @@ export function FamilyMemoryApp() {
       ? await postJson("/api/conversation/ask", conversationRequestBody(prompt, selectedHouseholdId))
       : await postJson("/api/captures/text", { text: prompt, householdId: selectedHouseholdId });
     setLatest(result);
+    notifyMemoryViewsChanged(result);
     setMessages((current) => [
       ...current,
       {
@@ -999,6 +1012,7 @@ export function FamilyMemoryApp() {
           ? await uploadVoiceBlob(voiceFile, undefined, selectedHouseholdId)
           : await postJson("/api/captures/voice", { transcript: prompt, householdId: selectedHouseholdId });
         setLatest(result);
+        notifyMemoryViewsChanged(result);
       } catch {
         setLatest(captureFailedResult());
       } finally {
@@ -1016,6 +1030,7 @@ export function FamilyMemoryApp() {
           ? await uploadVoiceBlob(voiceFile, undefined, selectedHouseholdId)
           : await postJson("/api/captures/voice", { transcript: prompt, householdId: selectedHouseholdId });
       setLatest(result);
+      notifyMemoryViewsChanged(result);
       setMessages((current) => [
         ...current,
         { id: crypto.randomUUID(), role: "user", content: prompt },
@@ -1074,6 +1089,7 @@ export function FamilyMemoryApp() {
     setBusy(true);
     const result = await uploadPhoto(file, text.trim(), selectedHouseholdId);
     setLatest(result);
+    notifyMemoryViewsChanged(result);
     if (activeTab === "chat") {
       setMessages((current) => [
         ...current,
@@ -1110,7 +1126,10 @@ export function FamilyMemoryApp() {
       for (const file of files) {
         lastResult = await uploadPhoto(file, note, selectedHouseholdId);
       }
-      if (lastResult) setLatest(lastResult);
+      if (lastResult) {
+        setLatest(lastResult);
+        notifyMemoryViewsChanged(lastResult);
+      }
     } catch {
       setLatest(captureFailedResult());
     } finally {

@@ -92,6 +92,12 @@ export function householdCanWrite(role?: string) {
   return role === "owner" || role === "member";
 }
 
+export function swipeDirection(deltaX: number, deltaY: number, viewportWidth: number): -1 | 1 | null {
+  if (viewportWidth > 720) return null;
+  if (Math.abs(deltaX) < 32 || Math.abs(deltaY) > Math.abs(deltaX) * 1.15) return null;
+  return deltaX > 0 ? -1 : 1;
+}
+
 async function pause(ms: number) {
   await new Promise((resolve) => window.setTimeout(resolve, ms));
 }
@@ -772,9 +778,9 @@ export function FamilyMemoryApp() {
     const deltaX = endX - swipeStartRef.current.x;
     const deltaY = endY - swipeStartRef.current.y;
     swipeStartRef.current = null;
-    if (window.innerWidth > 720) return;
-    if (Math.abs(deltaX) < 32 || Math.abs(deltaY) > Math.abs(deltaX) * 1.15) return;
-    moveTab(deltaX > 0 ? -1 : 1);
+    const direction = swipeDirection(deltaX, deltaY, window.innerWidth);
+    if (!direction) return;
+    moveTab(direction);
   }
 
   function canStartSwipe(target: EventTarget | null) {

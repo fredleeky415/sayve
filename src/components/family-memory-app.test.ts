@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { conversationRequestBody, householdCanWrite, shouldPreserveHouseholdsOnRefreshFailure, shouldRetryApiResult } from "./family-memory-app";
+import { conversationRequestBody, householdCanWrite, shouldPreserveHouseholdsOnRefreshFailure, shouldRetryApiResult, swipeDirection } from "./family-memory-app";
 
 describe("family memory app conversation routing", () => {
   it("always carries the selected household into ask requests", () => {
@@ -30,5 +30,13 @@ describe("family memory app conversation routing", () => {
     expect(householdCanWrite("member")).toBe(true);
     expect(householdCanWrite("viewer")).toBe(false);
     expect(householdCanWrite(undefined)).toBe(false);
+  });
+
+  it("only changes tabs when the mobile swipe is clearly horizontal", () => {
+    expect(swipeDirection(-48, 6, 390)).toBe(1);
+    expect(swipeDirection(52, 10, 390)).toBe(-1);
+    expect(swipeDirection(20, 1, 390)).toBeNull();
+    expect(swipeDirection(-42, 70, 390)).toBeNull();
+    expect(swipeDirection(-70, 8, 1024)).toBeNull();
   });
 });

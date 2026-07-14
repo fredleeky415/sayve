@@ -124,6 +124,10 @@ export function shouldRefreshDashboardOnReturn(eventName: "focus" | "visibilityc
   return visibilityState === "visible";
 }
 
+export function shouldRefreshDashboardOnAppEvent(eventName: string) {
+  return eventName === "sayve:memory-changed" || eventName === "sayve:household-changed";
+}
+
 function shortMonthLabel(month: string) {
   const monthIndex = Number(month.split("-")[1]) - 1;
   const labels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -267,6 +271,12 @@ export function DashboardView() {
     if (typeof window === "undefined") return undefined;
 
     const handleMemoryChanged = () => {
+      if (!shouldRefreshDashboardOnAppEvent("sayve:memory-changed")) return;
+      void refreshDashboard();
+    };
+
+    const handleHouseholdChanged = () => {
+      if (!shouldRefreshDashboardOnAppEvent("sayve:household-changed")) return;
       void refreshDashboard();
     };
 
@@ -281,10 +291,12 @@ export function DashboardView() {
     };
 
     window.addEventListener("sayve:memory-changed", handleMemoryChanged);
+    window.addEventListener("sayve:household-changed", handleHouseholdChanged);
     window.addEventListener("focus", handleReturnRefresh);
     document.addEventListener("visibilitychange", handleVisibilityRefresh);
     return () => {
       window.removeEventListener("sayve:memory-changed", handleMemoryChanged);
+      window.removeEventListener("sayve:household-changed", handleHouseholdChanged);
       window.removeEventListener("focus", handleReturnRefresh);
       document.removeEventListener("visibilitychange", handleVisibilityRefresh);
     };

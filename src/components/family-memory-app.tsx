@@ -310,6 +310,11 @@ export function FamilyMemoryApp() {
     window.dispatchEvent(new CustomEvent("sayve:memory-changed", { detail: { householdId: selectedHouseholdId } }));
   }
 
+  function notifyHouseholdChanged(nextHouseholdId: string) {
+    if (typeof window === "undefined" || !nextHouseholdId) return;
+    window.dispatchEvent(new CustomEvent("sayve:household-changed", { detail: { householdId: nextHouseholdId } }));
+  }
+
   async function refreshHouseholdStatus(householdIdOverride?: string) {
     const householdId = householdIdOverride ?? selectedHouseholdId;
     if (!householdId) {
@@ -397,6 +402,7 @@ export function FamilyMemoryApp() {
       setRecordedVoice(null);
       setVoiceStatus("idle");
       setVoiceSeconds(0);
+      notifyHouseholdChanged(selectedHouseholdId);
     }
     previousHouseholdIdRef.current = selectedHouseholdId;
   }, [selectedHouseholdId]);
@@ -478,6 +484,7 @@ export function FamilyMemoryApp() {
     setAuthMessage("");
     if (nextHouseholds.length > 0 && !nextHouseholds.some((household) => household.id === selectedHouseholdId)) {
       setSelectedHouseholdId(nextHouseholds[0].id);
+      notifyHouseholdChanged(nextHouseholds[0].id);
       void refreshHouseholdStatus(nextHouseholds[0].id);
       return;
     }

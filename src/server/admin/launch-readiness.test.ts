@@ -287,6 +287,38 @@ describe("launch readiness", () => {
     expect(report.checks.find((check) => check.id === "app_base_url")?.status).toBe("pass");
   });
 
+  it("keeps private beta config ready when schema/security passes but migration history cannot be read directly", async () => {
+    process.env.ADMIN_CONSOLE_TOKEN = strongAdminToken;
+    process.env.NEXT_PUBLIC_APP_URL = "https://sayve.app";
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
+    process.env.SUPABASE_URL = "https://example.supabase.co";
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role";
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "anon";
+    process.env.SUPABASE_AUTH_REQUIRED = "1";
+    process.env.MEMORY_REPOSITORY = "supabase";
+    process.env.SUPABASE_DEFAULT_HOUSEHOLD_ID = "00000000-0000-0000-0000-000000000001";
+    process.env.APP_ACCESS_TOKEN = strongAppToken;
+    process.env.OPENAI_API_KEY = "openai-key";
+    setAllModelEnv();
+    process.env.OPENAI_CAPTURE_INPUT_USD_PER_1M = "0.15";
+
+    const report = await getLaunchReadinessReport({
+      schemaCheck: async () => schemaResult(true),
+      appliedMigrations: async () =>
+        appliedMigrationsResult({
+          accessible: false,
+          ok: false,
+          issue: "Invalid schema: supabase_migrations"
+        }),
+      founderTelemetry: async () => completeTelemetry()
+    });
+
+    expect(report.configReadyForPrivateBeta).toBe(true);
+    expect(report.status).toBe("warn");
+    expect(report.checks.find((check) => check.id === "supabase_schema_security")?.status).toBe("warn");
+    expect(report.checks.find((check) => check.id === "supabase_schema_security")?.detail).toContain("migration history is not directly accessible");
+  });
+
   it("warns in private beta when founder onboarding health cannot be read", async () => {
     process.env.ADMIN_CONSOLE_TOKEN = strongAdminToken;
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";

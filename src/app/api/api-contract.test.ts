@@ -200,8 +200,8 @@ describe("API contract", () => {
       expect(response.status).toBe(503);
       expectNoStore(response);
       expectApiEnvelope(json);
-      expect(json.current_state).toBe("temporary_unavailable");
-      expect((json.data as { error?: string }).error).toBe("unexpected_server_error");
+      expect(json.current_state).toBe("memory_repository_unavailable");
+      expect((json.data as { error?: string }).error).toBe("memory_repository_unavailable");
     }
   });
 

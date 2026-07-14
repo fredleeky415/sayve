@@ -24,6 +24,6 @@ export async function POST(request: Request) {
     return noStoreJson(result);
   } catch (error) {
     console.error("[api/conversation/ask] unexpected failure", error);
-    return unexpectedApiErrorResponse();
+    return unexpectedApiErrorResponse(error, {}, { captureLabel: "conversation" });
   }
 }

@@ -18,8 +18,8 @@ export async function GET(request: Request) {
       needs_user_input: false,
       data: { categories }
     });
-  } catch {
-    return unexpectedApiErrorResponse();
+  } catch (error) {
+    return unexpectedApiErrorResponse(error);
   }
 }
 
@@ -62,7 +62,7 @@ export async function POST(request: Request) {
       });
     } catch (error) {
       if (!(error instanceof Error) || error.message !== "category_name_required") {
-        return unexpectedApiErrorResponse();
+        return unexpectedApiErrorResponse(error);
       }
       return noStoreJson(
         {
@@ -77,7 +77,7 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
-  } catch {
-    return unexpectedApiErrorResponse();
+  } catch (error) {
+    return unexpectedApiErrorResponse(error);
   }
 }

@@ -75,10 +75,10 @@ const liveProofPackageJson = JSON.parse(readFileSync(join(cwd, "outputs", "setup
 const envExampleNames = new Set(parseEnvNamesFromDotenv(envExample));
 const privateBetaExampleNames = parseEnvNamesFromDotenv(privateBetaExample);
 const publicLaunchExampleNames = parseEnvNamesFromDotenv(publicLaunchExample);
-const templateNames = parseEnvNamesFromTemplate(report.copyPasteEnvTemplate ?? []);
-const deploymentTemplateNames = parseEnvNamesFromTemplate(report.deploymentEnvTemplate ?? []);
-const privateBetaTemplateLines = normalizeTemplateLines(report.copyPasteEnvTemplate ?? []);
-const deploymentTemplateLines = normalizeTemplateLines(report.deploymentEnvTemplate ?? []);
+const templateNames = parseEnvNamesFromDotenv(generatedPrivateBetaExample);
+const deploymentTemplateNames = parseEnvNamesFromDotenv(generatedPublicLaunchExample);
+const privateBetaTemplateLines = normalizeDotenvLines(generatedPrivateBetaExample);
+const deploymentTemplateLines = normalizeDotenvLines(generatedPublicLaunchExample);
 const privateBetaExampleLines = normalizeDotenvLines(privateBetaExample);
 const publicLaunchExampleLines = normalizeDotenvLines(publicLaunchExample);
 const matrixNames = (report.envMatrix ?? []).map((row) => row.env).filter(Boolean);

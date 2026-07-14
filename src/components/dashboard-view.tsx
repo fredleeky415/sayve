@@ -134,11 +134,11 @@ function groupMonthlyFacts(facts: Dashboard["monthlyFacts"]) {
   }, []);
 }
 
-function looksLikeUuid(value: string | undefined) {
+export function looksLikeUuid(value: string | undefined) {
   return Boolean(value && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value));
 }
 
-function readableMemberLabel(value: string | undefined) {
+export function readableMemberLabel(value: string | undefined) {
   if (!value) return "";
   if (value === "actor") return "自己";
   if (value === "partner") return "另一位成員";
@@ -146,7 +146,7 @@ function readableMemberLabel(value: string | undefined) {
   return value;
 }
 
-function ownershipLabel(fact: Dashboard["monthlyFacts"][number]) {
+export function ownershipLabel(fact: Dashboard["monthlyFacts"][number]) {
   if ((fact.ownershipScope ?? "shared") === "shared") return "公家";
   if (fact.assignedMember === "actor") return "自己";
 

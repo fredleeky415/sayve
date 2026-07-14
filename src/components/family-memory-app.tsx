@@ -73,6 +73,10 @@ function randomPlaceholder(current?: string) {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
+export function conversationRequestBody(question: string, householdId: string) {
+  return { question, householdId };
+}
+
 async function postJson(path: string, body: Record<string, unknown>) {
   const response = await fetch(path, {
     method: "POST",
@@ -633,7 +637,7 @@ export function FamilyMemoryApp() {
     setBusy(true);
     setMessages((current) => [...current, { id: crypto.randomUUID(), role: "user", content: prompt }]);
     const result = looksLikeQuestion(prompt)
-      ? await postJson("/api/conversation/ask", { question: prompt, householdId: selectedHouseholdId })
+      ? await postJson("/api/conversation/ask", conversationRequestBody(prompt, selectedHouseholdId))
       : await postJson("/api/captures/text", { text: prompt, householdId: selectedHouseholdId });
     setLatest(result);
     setMessages((current) => [
@@ -680,7 +684,7 @@ export function FamilyMemoryApp() {
     setBusy(true);
     try {
       const result = shouldAsk
-        ? await postJson("/api/conversation/ask", { question: typedText, householdId: selectedHouseholdId })
+        ? await postJson("/api/conversation/ask", conversationRequestBody(typedText, selectedHouseholdId))
         : voiceFile
           ? await uploadVoiceBlob(voiceFile, undefined, selectedHouseholdId)
           : await postJson("/api/captures/voice", { transcript: prompt, householdId: selectedHouseholdId });

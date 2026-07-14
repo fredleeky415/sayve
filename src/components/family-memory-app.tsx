@@ -300,8 +300,62 @@ export function FamilyMemoryApp() {
     }
   }
 
+  async function syncBrowserStateFromStorage() {
+    if (typeof window === "undefined") return;
+
+    const savedHouseholdId = window.localStorage.getItem(authStorageKeys.householdId) ?? "";
+    const savedPrototypeUserId = window.localStorage.getItem(authStorageKeys.prototypeUserId) ?? "";
+    const savedToken = window.localStorage.getItem(authStorageKeys.token);
+    const savedUserId = window.localStorage.getItem(authStorageKeys.userId);
+    const savedEmail = window.localStorage.getItem(authStorageKeys.userEmail) ?? undefined;
+
+    setSelectedHouseholdId(savedHouseholdId);
+    setPrototypeUserId(savedPrototypeUserId);
+
+    if (savedToken && savedUserId) {
+      setSession({
+        accessToken: savedToken,
+        userId: savedUserId,
+        email: savedEmail
+      });
+    } else if (!savedPrototypeUserId) {
+      setSession(null);
+    }
+  }
+
   useEffect(() => {
     void refreshHouseholds();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.accessToken, prototypeUserId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const syncAndRefresh = () => {
+      void syncBrowserStateFromStorage().then(() => {
+        void refreshHouseholds();
+      });
+    };
+
+    const handleStorage = (event: StorageEvent) => {
+      if (!event.key || Object.values(authStorageKeys).includes(event.key as (typeof authStorageKeys)[keyof typeof authStorageKeys])) {
+        syncAndRefresh();
+      }
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") syncAndRefresh();
+    };
+
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener("focus", syncAndRefresh);
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("focus", syncAndRefresh);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.accessToken, prototypeUserId]);
 

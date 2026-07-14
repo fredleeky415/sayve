@@ -78,6 +78,25 @@ b {
   letter-spacing: 0;
 }
 
+.appViewport {
+  min-height: calc(100vh - 64px);
+  overflow: hidden;
+}
+
+.appPages {
+  min-height: calc(100vh - 64px);
+  display: flex;
+  width: 100%;
+  transition: transform 260ms ease;
+  will-change: transform;
+}
+
+.appPage {
+  width: 100%;
+  flex: 0 0 100%;
+  min-width: 0;
+}
+
 .simpleTabs {
   display: inline-flex;
   gap: 6px;
@@ -2609,6 +2628,15 @@ b {
 }
 
 @media (max-width: 720px) {
+  .appViewport,
+  .appPages {
+    min-height: calc(100vh - 64px);
+  }
+
+  .appPage {
+    padding: 0 16px;
+  }
+
   .appTopbar {
     height: auto;
     min-height: 64px;
@@ -2672,12 +2700,14 @@ b {
 
   .chatCapture {
     min-height: calc(100vh - 112px);
+    width: 100%;
     justify-content: flex-start;
     padding-top: 72px;
   }
 
   .captureHome {
     min-height: calc(100vh - 112px);
+    width: 100%;
     justify-content: flex-start;
     padding-top: 72px;
   }

@@ -139,6 +139,10 @@ export function shouldRefreshViewsAfterResult(result: ApiResult | null | undefin
   return !result.needs_user_input;
 }
 
+function tabIndex(tab: Tab) {
+  return tabOrder.indexOf(tab);
+}
+
 async function pause(ms: number) {
   await new Promise((resolve) => window.setTimeout(resolve, ms));
 }
@@ -277,7 +281,9 @@ export function FamilyMemoryApp() {
   const [initialInviteState, setInitialInviteState] = useState<InitialInviteState | null>(null);
   const [initBusy, setInitBusy] = useState(false);
   const swipeStartRef = useRef<{ x: number; y: number; lastX: number; lastY: number } | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isMobileLayout, setIsMobileLayout] = useState(false);
+  const homeFileInputRef = useRef<HTMLInputElement>(null);
+  const chatFileInputRef = useRef<HTMLInputElement>(null);
   const photoPreviewsRef = useRef(photoPreviews);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -350,6 +356,23 @@ export function FamilyMemoryApp() {
       mounted = false;
       unsubscribe?.();
     };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return undefined;
+    const media = window.matchMedia("(max-width: 720px)");
+    const legacyMedia = media as MediaQueryList & {
+      addListener?: (listener: (event: MediaQueryListEvent) => void) => void;
+      removeListener?: (listener: (event: MediaQueryListEvent) => void) => void;
+    };
+    const syncViewport = () => setIsMobileLayout(media.matches);
+    syncViewport();
+    if ("addEventListener" in media) {
+      media.addEventListener("change", syncViewport);
+      return () => media.removeEventListener("change", syncViewport);
+    }
+    legacyMedia.addListener?.(syncViewport);
+    return () => legacyMedia.removeListener?.(syncViewport);
   }, []);
 
   useEffect(() => {
@@ -1147,6 +1170,219 @@ export function FamilyMemoryApp() {
     }
   }
 
+  const homeView = (
+    <section className="captureHome">
+      <div className="heroPrompt">
+        <p>Sayve</p>
+        <h1>跟 Sayve 說一件事</h1>
+        {session?.accessToken && !householdsResolved ? <span className="roleHint">正在準備你嘅家庭記憶...</span> : null}
+        {!selectedHouseholdCanWrite && selectedHousehold ? <span className="roleHint">你而家用緊只讀模式，可以問 Sayve，但未可以記低。</span> : null}
+      </div>
+
+      <form className="captureComposer" onSubmit={submitHomeText}>
+        <div className="captureTextBar">
+          <input
+            className="captureInput"
+            aria-label="跟 Sayve 說一件事"
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+            onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
+              if (event.key === "Enter" && captureMode === "text") {
+                void submitHomeText();
+              }
+            }}
+            placeholder={selectedHouseholdCanWrite ? capturePlaceholder : "只讀模式：你可以問 Sayve 家庭狀況"}
+            disabled={!selectedHouseholdCanWrite || !householdInteractionReady}
+          />
+          <button type="submit" className="captureInlineSend" disabled={!text.trim() || !selectedHouseholdCanWrite || !householdInteractionReady} title="Send">
+            <Send size={18} />
+          </button>
+        </div>
+        <input
+          ref={homeFileInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          multiple
+          hidden
+          onChange={(event) => {
+            const files = Array.from(event.target.files ?? []);
+            addPendingPhotos(files);
+            event.currentTarget.value = "";
+          }}
+        />
+        <div className="captureModeActions">
+          <button
+            type="button"
+            className={captureMode === "photo" ? "captureModeButton active" : "captureModeButton"}
+            aria-label="影相"
+            title="影相"
+            onClick={() => {
+              if (!selectedHouseholdCanWrite) return;
+              setCaptureMode("photo");
+              homeFileInputRef.current?.click();
+            }}
+            disabled={!selectedHouseholdCanWrite || !householdInteractionReady}
+          >
+            <Camera size={20} />
+          </button>
+          <button
+            type="button"
+            className={captureMode === "voice" ? "captureModeButton active" : "captureModeButton"}
+            aria-label="錄音"
+            title="錄音"
+            onClick={startVoiceStub}
+            disabled={!selectedHouseholdCanWrite || !householdInteractionReady}
+          >
+            <Mic size={20} />
+          </button>
+        </div>
+
+        {captureMode === "photo" && (
+          <div className="capturePanel">
+            <div className="capturePanelText">
+              <strong>{pendingPhotos.length > 0 ? `${pendingPhotos.length} 張相片未送出` : "影相 / 選擇收據"}</strong>
+              <span>{pendingPhotos.length > 0 ? "可以再加相，或者加一句補充再送。" : "先進入相片介面，確認後先送出。"}</span>
+              {pendingPhotos.length > 0 && (
+                <div className="capturePhotoPreviewGrid">
+                  {photoPreviews.map((preview, index) => (
+                    <figure key={`${preview.file.name}-${preview.file.size}-${index}`} className="capturePhotoPreview">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={preview.url} alt={preview.file.name} />
+                      <figcaption>{preview.file.name}</figcaption>
+                      <button type="button" onClick={() => removePendingPhoto(index)} aria-label="移除相片" disabled={busy}>
+                        <X size={13} />
+                      </button>
+                    </figure>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button type="button" className="capturePanelGhost" onClick={() => homeFileInputRef.current?.click()} disabled={busy}>
+              {pendingPhotos.length > 0 ? "再加" : "選擇"}
+            </button>
+            <button type="button" className="capturePanelSend" onClick={submitPendingPhotos} disabled={busy || pendingPhotos.length === 0}>
+              <Send size={18} />
+            </button>
+          </div>
+        )}
+
+        {captureMode === "voice" && (
+          <div className="capturePanel voice">
+            <div className="recordingBar" aria-label="Recording">
+              <Mic size={18} />
+              <span className={voiceStatus === "recording" ? "live" : ""} />
+              <span className={voiceStatus === "recording" ? "live" : ""} />
+              <span className={voiceStatus === "recording" ? "live" : ""} />
+              <span className={voiceStatus === "recording" ? "live" : ""} />
+              <strong>
+                {voiceStatus === "recording" ? "Recording" : voiceStatus === "ready" ? "Ready" : "Voice"} · {formatVoiceTime(voiceSeconds)}
+              </strong>
+            </div>
+            {voiceStatus === "recording" ? (
+              <button type="button" className="capturePanelGhost iconOnly" onClick={stopVoiceStub} disabled={busy} aria-label="停止錄音">
+                <Square size={15} />
+              </button>
+            ) : (
+              <button type="button" className="capturePanelGhost" onClick={startVoiceStub} disabled={busy}>
+                重錄
+              </button>
+            )}
+            <button type="button" className="capturePanelSend" onClick={submitVoice} disabled={busy || voiceStatus === "recording"}>
+              <Send size={18} />
+            </button>
+          </div>
+        )}
+      </form>
+
+      {latest && (
+        <div
+          className={
+            latest.current_state === "capture_received"
+              ? "memoryToast processing"
+              : latest.needs_user_input
+                ? "memoryToast ask"
+                : "memoryToast"
+          }
+        >
+          {latest.current_state === "capture_received" ? (
+            <LoaderCircle size={18} />
+          ) : latest.needs_user_input ? (
+            <CircleHelp size={18} />
+          ) : (
+            <CheckCircle2 size={18} />
+          )}
+          <span>{confidenceText(latest)}</span>
+          {homeProcessingCount > 0 && <small>{homeProcessingCount}</small>}
+        </div>
+      )}
+    </section>
+  );
+
+  const chatView = (
+    <section className="chatCapture">
+      <div className="heroPrompt">
+        <p>Ask</p>
+        <h1>問一問 Sayve</h1>
+        {session?.accessToken && !householdsResolved ? <span>正在準備你嘅家庭記憶...</span> : null}
+        <span>
+          {selectedHouseholdCanWrite
+            ? "可以問家庭財務狀況，也可以直接講一件新發生的事。"
+            : "你而家用緊只讀模式，可以問家庭財務狀況。"}
+        </span>
+      </div>
+
+      {messages.length > 0 && (
+        <div className="messageList" aria-live="polite">
+          {messages.map((message) => (
+            <div className={`message ${message.role}`} key={message.id}>
+              <span>{message.content}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <form className="composer" onSubmit={submitChatText}>
+        <textarea
+          aria-label="跟 Sayve 對話"
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          placeholder={
+            selectedHouseholdCanWrite
+              ? "例如：今日喺大家樂食飯 HK$300 / 上個月食飯用左幾多錢？"
+              : "例如：上個月食飯用左幾多錢？"
+          }
+          rows={3}
+          disabled={!householdInteractionReady && Boolean(session?.accessToken)}
+        />
+        <div className="composerActions">
+          <input
+            ref={chatFileInputRef}
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void submitPhoto(file);
+              event.currentTarget.value = "";
+            }}
+          />
+          <button type="button" className="iconButton" onClick={() => chatFileInputRef.current?.click()} disabled={busy || !selectedHouseholdCanWrite || !householdInteractionReady} title="Photo">
+            <Camera size={20} />
+          </button>
+          <button type="button" className="iconButton" onClick={submitVoice} disabled={busy || !text.trim() || !selectedHouseholdCanWrite || !householdInteractionReady} title="Voice">
+            <Mic size={20} />
+          </button>
+          <button type="submit" className="sendButton" disabled={busy || !text.trim() || (!householdInteractionReady && Boolean(session?.accessToken))} title="Send">
+            <Send size={20} />
+          </button>
+        </div>
+      </form>
+    </section>
+  );
+
+  const dashboardView = activeTab === "dashboard" || !isMobileLayout ? <DashboardView /> : <section className="dashboardView"><p className="emptyState">向左滑睇總覽</p></section>;
+
   return (
     <main
       className="appShell"
@@ -1483,216 +1719,26 @@ export function FamilyMemoryApp() {
           </div>
         </section>
       )}
-
-      {activeTab === "home" ? (
-        <section className="captureHome">
-          <div className="heroPrompt">
-            <p>Sayve</p>
-            <h1>跟 Sayve 說一件事</h1>
-            {session?.accessToken && !householdsResolved ? <span className="roleHint">正在準備你嘅家庭記憶...</span> : null}
-            {!selectedHouseholdCanWrite && selectedHousehold ? <span className="roleHint">你而家用緊只讀模式，可以問 Sayve，但未可以記低。</span> : null}
+      {isMobileLayout ? (
+        <div className="appViewport">
+          <div className="appPages" style={{ transform: `translateX(-${tabIndex(activeTab) * 100}%)` }}>
+            <section className="appPage" aria-hidden={activeTab !== "chat"}>
+              {chatView}
+            </section>
+            <section className="appPage" aria-hidden={activeTab !== "home"}>
+              {homeView}
+            </section>
+            <section className="appPage" aria-hidden={activeTab !== "dashboard"}>
+              {dashboardView}
+            </section>
           </div>
-
-          <form className="captureComposer" onSubmit={submitHomeText}>
-            <div className="captureTextBar">
-              <input
-                className="captureInput"
-                aria-label="跟 Sayve 說一件事"
-                value={text}
-                onChange={(event) => setText(event.target.value)}
-                onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
-                  if (event.key === "Enter" && captureMode === "text") {
-                    void submitHomeText();
-                  }
-                }}
-                placeholder={selectedHouseholdCanWrite ? capturePlaceholder : "只讀模式：你可以問 Sayve 家庭狀況"}
-                disabled={!selectedHouseholdCanWrite || !householdInteractionReady}
-              />
-              <button type="submit" className="captureInlineSend" disabled={!text.trim() || !selectedHouseholdCanWrite || !householdInteractionReady} title="Send">
-                <Send size={18} />
-              </button>
-            </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              multiple
-              hidden
-              onChange={(event) => {
-                const files = Array.from(event.target.files ?? []);
-                addPendingPhotos(files);
-                event.currentTarget.value = "";
-              }}
-            />
-            <div className="captureModeActions">
-              <button
-                type="button"
-                className={captureMode === "photo" ? "captureModeButton active" : "captureModeButton"}
-                aria-label="影相"
-                title="影相"
-                onClick={() => {
-                  if (!selectedHouseholdCanWrite) return;
-                  setCaptureMode("photo");
-                  fileInputRef.current?.click();
-                }}
-                disabled={!selectedHouseholdCanWrite || !householdInteractionReady}
-              >
-                <Camera size={20} />
-              </button>
-              <button
-                type="button"
-                className={captureMode === "voice" ? "captureModeButton active" : "captureModeButton"}
-                aria-label="錄音"
-                title="錄音"
-                onClick={startVoiceStub}
-                disabled={!selectedHouseholdCanWrite || !householdInteractionReady}
-              >
-                <Mic size={20} />
-              </button>
-            </div>
-
-            {captureMode === "photo" && (
-              <div className="capturePanel">
-                <div className="capturePanelText">
-                  <strong>{pendingPhotos.length > 0 ? `${pendingPhotos.length} 張相片未送出` : "影相 / 選擇收據"}</strong>
-                  <span>{pendingPhotos.length > 0 ? "可以再加相，或者加一句補充再送。" : "先進入相片介面，確認後先送出。"}</span>
-                  {pendingPhotos.length > 0 && (
-                    <div className="capturePhotoPreviewGrid">
-                      {photoPreviews.map((preview, index) => (
-                        <figure key={`${preview.file.name}-${preview.file.size}-${index}`} className="capturePhotoPreview">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={preview.url} alt={preview.file.name} />
-                          <figcaption>{preview.file.name}</figcaption>
-                          <button type="button" onClick={() => removePendingPhoto(index)} aria-label="移除相片" disabled={busy}>
-                            <X size={13} />
-                          </button>
-                        </figure>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <button type="button" className="capturePanelGhost" onClick={() => fileInputRef.current?.click()} disabled={busy}>
-                  {pendingPhotos.length > 0 ? "再加" : "選擇"}
-                </button>
-                <button type="button" className="capturePanelSend" onClick={submitPendingPhotos} disabled={busy || pendingPhotos.length === 0}>
-                  <Send size={18} />
-                </button>
-              </div>
-            )}
-
-            {captureMode === "voice" && (
-              <div className="capturePanel voice">
-                <div className="recordingBar" aria-label="Recording">
-                  <Mic size={18} />
-                  <span className={voiceStatus === "recording" ? "live" : ""} />
-                  <span className={voiceStatus === "recording" ? "live" : ""} />
-                  <span className={voiceStatus === "recording" ? "live" : ""} />
-                  <span className={voiceStatus === "recording" ? "live" : ""} />
-                  <strong>
-                    {voiceStatus === "recording" ? "Recording" : voiceStatus === "ready" ? "Ready" : "Voice"} · {formatVoiceTime(voiceSeconds)}
-                  </strong>
-                </div>
-                {voiceStatus === "recording" ? (
-                  <button type="button" className="capturePanelGhost iconOnly" onClick={stopVoiceStub} disabled={busy} aria-label="停止錄音">
-                    <Square size={15} />
-                  </button>
-                ) : (
-                  <button type="button" className="capturePanelGhost" onClick={startVoiceStub} disabled={busy}>
-                    重錄
-                  </button>
-                )}
-                <button type="button" className="capturePanelSend" onClick={submitVoice} disabled={busy || voiceStatus === "recording"}>
-                  <Send size={18} />
-                </button>
-              </div>
-            )}
-          </form>
-
-          {latest && (
-            <div
-              className={
-                latest.current_state === "capture_received"
-                  ? "memoryToast processing"
-                  : latest.needs_user_input
-                    ? "memoryToast ask"
-                    : "memoryToast"
-              }
-            >
-              {latest.current_state === "capture_received" ? (
-                <LoaderCircle size={18} />
-              ) : latest.needs_user_input ? (
-                <CircleHelp size={18} />
-              ) : (
-                <CheckCircle2 size={18} />
-              )}
-              <span>{confidenceText(latest)}</span>
-              {homeProcessingCount > 0 && <small>{homeProcessingCount}</small>}
-            </div>
-          )}
-        </section>
+        </div>
+      ) : activeTab === "home" ? (
+        homeView
       ) : activeTab === "chat" ? (
-        <section className="chatCapture">
-          <div className="heroPrompt">
-            <p>Ask</p>
-            <h1>問一問 Sayve</h1>
-            {session?.accessToken && !householdsResolved ? <span>正在準備你嘅家庭記憶...</span> : null}
-            <span>
-              {selectedHouseholdCanWrite
-                ? "可以問家庭財務狀況，也可以直接講一件新發生的事。"
-                : "你而家用緊只讀模式，可以問家庭財務狀況。"}
-            </span>
-          </div>
-
-          {messages.length > 0 && (
-            <div className="messageList" aria-live="polite">
-              {messages.map((message) => (
-                <div className={`message ${message.role}`} key={message.id}>
-                  <span>{message.content}</span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <form className="composer" onSubmit={submitChatText}>
-            <textarea
-              aria-label="跟 Sayve 對話"
-              value={text}
-              onChange={(event) => setText(event.target.value)}
-              placeholder={
-                selectedHouseholdCanWrite
-                  ? "例如：今日喺大家樂食飯 HK$300 / 上個月食飯用左幾多錢？"
-                  : "例如：上個月食飯用左幾多錢？"
-              }
-              rows={3}
-              disabled={!householdInteractionReady && Boolean(session?.accessToken)}
-            />
-            <div className="composerActions">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                hidden
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) void submitPhoto(file);
-                  event.currentTarget.value = "";
-                }}
-              />
-              <button type="button" className="iconButton" onClick={() => fileInputRef.current?.click()} disabled={busy || !selectedHouseholdCanWrite || !householdInteractionReady} title="Photo">
-                <Camera size={20} />
-              </button>
-              <button type="button" className="iconButton" onClick={submitVoice} disabled={busy || !text.trim() || !selectedHouseholdCanWrite || !householdInteractionReady} title="Voice">
-                <Mic size={20} />
-              </button>
-              <button type="submit" className="sendButton" disabled={busy || !text.trim() || (!householdInteractionReady && Boolean(session?.accessToken))} title="Send">
-                <Send size={20} />
-              </button>
-            </div>
-          </form>
-        </section>
+        chatView
       ) : (
-        <DashboardView />
+        dashboardView
       )}
     </main>
   );

@@ -82,6 +82,11 @@ export function shouldRetryApiResult(result: Partial<ApiResult> | null | undefin
   return status === 503 || Boolean(result?.current_state && transientApiStates.has(result.current_state));
 }
 
+export function shouldPreserveHouseholdsOnRefreshFailure(existingHouseholds: HouseholdOption[], error?: string, status?: number) {
+  if (existingHouseholds.length === 0) return false;
+  return status === 503 || error === "temporary_unavailable" || error === "login_required";
+}
+
 async function pause(ms: number) {
   await new Promise((resolve) => window.setTimeout(resolve, ms));
 }
@@ -296,18 +301,31 @@ export function FamilyMemoryApp() {
 
   async function refreshHouseholds() {
     if (!session?.accessToken && !prototypeUserId) return;
-    const response = await fetch("/api/households", { headers: storedAuthHeaders() });
-    const result = (await response.json()) as { households?: HouseholdOption[]; error?: string };
-    if (!response.ok) {
+    let finalStatus = 0;
+    let result: { households?: HouseholdOption[]; error?: string } = {};
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const response = await fetch("/api/households", { headers: storedAuthHeaders() });
+      finalStatus = response.status;
+      result = (await response.json()) as { households?: HouseholdOption[]; error?: string };
+      if (response.ok || !shouldPreserveHouseholdsOnRefreshFailure(households, result.error, response.status) || attempt === 1) break;
+      await pause(240);
+    }
+
+    if (finalStatus < 200 || finalStatus >= 300) {
+      const nextMessage =
+        result.error === "login_required"
+          ? "登入狀態剛剛斷咗一下，Sayve 會保留你而家個家庭。"
+          : result.error === "temporary_unavailable"
+            ? "家庭資料暫時未連上，Sayve 先保留你而家個家庭。"
+            : result.error ?? "暫時讀唔到家庭。";
+      if (shouldPreserveHouseholdsOnRefreshFailure(households, result.error, finalStatus)) {
+        setAuthMessage(nextMessage);
+        return;
+      }
       setHouseholds([]);
       setSelectedHouseholdId("");
-      setAuthMessage(
-        result.error === "login_required"
-          ? "請先登入。"
-          : result.error === "temporary_unavailable"
-            ? "家庭資料暫時未連上，請稍後再試。"
-            : result.error ?? "暫時讀唔到家庭。"
-      );
+      setAuthMessage(nextMessage);
       return;
     }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { conversationRequestBody, shouldRetryApiResult } from "./family-memory-app";
+import { conversationRequestBody, shouldPreserveHouseholdsOnRefreshFailure, shouldRetryApiResult } from "./family-memory-app";
 
 describe("family memory app conversation routing", () => {
   it("always carries the selected household into ask requests", () => {
@@ -14,5 +14,14 @@ describe("family memory app conversation routing", () => {
     expect(shouldRetryApiResult({ current_state: "temporary_unavailable" }, 200)).toBe(true);
     expect(shouldRetryApiResult({ current_state: "household_access_denied" }, 403)).toBe(false);
     expect(shouldRetryApiResult({ current_state: "active" }, 200)).toBe(false);
+  });
+
+  it("keeps the current household state during transient household refresh failures", () => {
+    const households = [{ id: "household_lee", name: "LeeFam", role: "owner" }];
+
+    expect(shouldPreserveHouseholdsOnRefreshFailure(households, "temporary_unavailable", 503)).toBe(true);
+    expect(shouldPreserveHouseholdsOnRefreshFailure(households, "login_required", 401)).toBe(true);
+    expect(shouldPreserveHouseholdsOnRefreshFailure(households, "household_access_denied", 403)).toBe(false);
+    expect(shouldPreserveHouseholdsOnRefreshFailure([], "temporary_unavailable", 503)).toBe(false);
   });
 });

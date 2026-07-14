@@ -2633,8 +2633,28 @@ b {
     min-height: calc(100vh - 64px);
   }
 
+  .mobilePager {
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .mobilePager::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mobilePagerTrack {
+    width: max-content;
+    min-width: 300%;
+    transition: none;
+    will-change: auto;
+  }
+
   .appPage {
     padding: 0 16px;
+    scroll-snap-align: start;
   }
 
   .appTopbar {

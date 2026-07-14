@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { Camera, CheckCircle2, CircleHelp, LoaderCircle, LogOut, Mail, Mic, Send, Square, Users, X } from "lucide-react";
-import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, KeyboardEvent, UIEvent, useEffect, useRef, useState } from "react";
 import {
   authStorageKeys,
   browserAuthRedirectOrigin,
@@ -258,6 +258,8 @@ export function FamilyMemoryApp() {
   const [pendingPhotos, setPendingPhotos] = useState<File[]>([]);
   const [photoPreviews, setPhotoPreviews] = useState<Array<{ file: File; url: string }>>([]);
   const [voiceStatus, setVoiceStatus] = useState<VoiceStatus>("idle");
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const mobileScrollSyncRef = useRef(false);
   const [voiceSeconds, setVoiceSeconds] = useState(0);
   const [recordedVoice, setRecordedVoice] = useState<RecordedVoice | null>(null);
   const [latest, setLatest] = useState<ApiResult | null>(null);
@@ -913,6 +915,17 @@ export function FamilyMemoryApp() {
     });
   }
 
+  function syncTabFromViewport(event: UIEvent<HTMLDivElement>) {
+    if (!isMobileLayout || mobileScrollSyncRef.current) return;
+    const viewport = event.currentTarget;
+    if (!viewport.clientWidth) return;
+    const nextIndex = Math.round(viewport.scrollLeft / viewport.clientWidth);
+    const nextTab = tabOrder[Math.min(tabOrder.length - 1, Math.max(0, nextIndex))];
+    if (nextTab !== activeTab) {
+      setActiveTab(nextTab);
+    }
+  }
+
   function startSwipe(clientX: number, clientY: number) {
     swipeStartRef.current = { x: clientX, y: clientY, lastX: clientX, lastY: clientY };
   }
@@ -989,6 +1002,20 @@ export function FamilyMemoryApp() {
       document.removeEventListener("touchcancel", handleTouchCancel, true);
     };
   }, []);
+
+  useEffect(() => {
+    if (!isMobileLayout) return;
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const nextLeft = tabIndex(activeTab) * viewport.clientWidth;
+    if (Math.abs(viewport.scrollLeft - nextLeft) < 2) return;
+    mobileScrollSyncRef.current = true;
+    viewport.scrollTo({ left: nextLeft, behavior: "smooth" });
+    const timeout = window.setTimeout(() => {
+      mobileScrollSyncRef.current = false;
+    }, 320);
+    return () => window.clearTimeout(timeout);
+  }, [activeTab, isMobileLayout]);
 
   async function submitHomeText(event?: FormEvent) {
     event?.preventDefault();
@@ -1748,8 +1775,8 @@ export function FamilyMemoryApp() {
         </section>
       )}
       {isMobileLayout ? (
-        <div className="appViewport">
-          <div className="appPages" style={{ transform: `translateX(-${tabIndex(activeTab) * 100}%)` }}>
+        <div className="appViewport mobilePager" ref={viewportRef} onScroll={syncTabFromViewport}>
+          <div className="appPages mobilePagerTrack">
             <section className="appPage" aria-hidden={activeTab !== "chat"}>
               {chatView}
             </section>

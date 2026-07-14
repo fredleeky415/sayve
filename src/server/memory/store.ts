@@ -11,7 +11,7 @@ import type {
   MemoryRevision
 } from "@/shared/memory/types";
 import { createSupabaseMemoryRepository } from "@/server/memory/supabase-repository";
-import { createSupabaseServiceClient } from "@/server/supabase/service-client";
+import { createSupabaseServiceClient, getSupabaseServiceConfig } from "@/server/supabase/service-client";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
@@ -120,8 +120,9 @@ export type MemoryRepository = {
 
 const MAX_REPOSITORY_WRITE_ATTEMPTS = 2;
 
-function configuredRepositoryMode(): MemoryRepositoryMode {
+export function resolveMemoryRepositoryMode(): MemoryRepositoryMode {
   if (process.env.MEMORY_REPOSITORY === "supabase") return "supabase";
+  if (!process.env.MEMORY_REPOSITORY && getSupabaseServiceConfig()) return "supabase";
   return persistenceEnabled() ? "local_file" : "memory_only";
 }
 
@@ -132,7 +133,7 @@ export function requiresProductionStorageBoundary(): boolean {
 export function assertProductionStorageBoundary(): void {
   if (!requiresProductionStorageBoundary()) return;
   if (process.env.NODE_ENV === "test" && process.env.SAYVE_ENFORCE_STORAGE_BOUNDARY_IN_TEST !== "1") return;
-  if (configuredRepositoryMode() !== "supabase") {
+  if (resolveMemoryRepositoryMode() !== "supabase") {
     throw new Error("production_storage_boundary_violation");
   }
 }
@@ -196,7 +197,7 @@ export function resetStore(): void {
 export function getMemoryRepository(householdIdOverride?: string): MemoryRepository {
   assertProductionStorageBoundary();
 
-  if (configuredRepositoryMode() === "supabase") {
+  if (resolveMemoryRepositoryMode() === "supabase") {
     const supabase = createSupabaseServiceClient();
     const householdId = householdIdOverride ?? process.env.SUPABASE_DEFAULT_HOUSEHOLD_ID;
     if (!supabase || !householdId) {
@@ -212,7 +213,7 @@ export function getMemoryRepository(householdIdOverride?: string): MemoryReposit
   }
 
   return {
-    mode: configuredRepositoryMode(),
+    mode: resolveMemoryRepositoryMode(),
     read: getStore,
     commit: saveStore,
     reset: resetStore,
@@ -223,7 +224,7 @@ export function getMemoryRepository(householdIdOverride?: string): MemoryReposit
 }
 
 export function invalidateMemoryRepository(householdIdOverride?: string): void {
-  if (process.env.MEMORY_REPOSITORY !== "supabase") return;
+  if (resolveMemoryRepositoryMode() !== "supabase") return;
 
   const householdId = householdIdOverride ?? process.env.SUPABASE_DEFAULT_HOUSEHOLD_ID;
   const key = householdId ? `supabase:${householdId}` : undefined;

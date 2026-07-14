@@ -1,4 +1,4 @@
-import { getMemoryRepository } from "@/server/memory/store";
+import { getMemoryRepository, resolveMemoryRepositoryMode } from "@/server/memory/store";
 import { createSupabaseServiceClient } from "@/server/supabase/service-client";
 
 export type RepositorySmokeTestResult = {
@@ -46,7 +46,7 @@ export async function runRepositorySmokeTest(input: {
   supabase?: ReturnType<typeof createSupabaseServiceClient>;
   repositoryFactory?: typeof getMemoryRepository;
 } = {}): Promise<RepositorySmokeTestResult> {
-  const repositoryMode = process.env.MEMORY_REPOSITORY === "supabase" ? "supabase" : "local_file";
+  const repositoryMode = resolveMemoryRepositoryMode();
   const householdId = input.householdId?.trim() || process.env.SUPABASE_DEFAULT_HOUSEHOLD_ID;
   const supabase = input.supabase ?? createSupabaseServiceClient();
   const repositoryFactory = input.repositoryFactory ?? getMemoryRepository;
@@ -62,7 +62,7 @@ export async function runRepositorySmokeTest(input: {
       ownerCount: 0,
       viewerCount: 0,
       onboarding: emptyOnboardingSummary(),
-      error: "MEMORY_REPOSITORY is not set to supabase."
+      error: "Memory repository is still local; switch runtime storage to Supabase before launch."
     };
   }
 

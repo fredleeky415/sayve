@@ -1,10 +1,11 @@
 import { noStoreJson } from "@/server/api/http";
+import { resolveMemoryRepositoryMode } from "@/server/memory/store";
 
 export async function GET() {
   return noStoreJson({
     ok: true,
     app: "sayve",
     timestamp: new Date().toISOString(),
-    repositoryMode: process.env.MEMORY_REPOSITORY === "supabase" ? "supabase" : "local_file"
+    repositoryMode: resolveMemoryRepositoryMode()
   });
 }

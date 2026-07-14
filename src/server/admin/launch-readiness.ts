@@ -2,6 +2,7 @@ import { founderTokenRequired, getFounderConsoleData } from "@/server/admin/foun
 import { runCaptureMediaStorageSmokeTest, type CaptureMediaStorageSmokeResult } from "@/server/media/storage-smoke";
 import { readAppliedSupabaseMigrations, type AppliedSupabaseMigrationsResult } from "@/server/memory/supabase-applied-migrations";
 import { checkSupabaseSchema, type SupabaseSchemaCheckResult } from "@/server/memory/supabase-schema-check";
+import { resolveMemoryRepositoryMode } from "@/server/memory/store";
 import { usageLimits, usageLimitsDisabled } from "@/server/memory/usage";
 import { createSupabaseServiceClient, supabaseServiceConfigured } from "@/server/supabase/service-client";
 
@@ -971,7 +972,7 @@ function schemaReadinessCheck(
 
 export async function getLaunchReadinessReport(options: LaunchReadinessOptions = {}): Promise<LaunchReadinessReport> {
   const limits = usageLimits();
-  const repositoryMode = process.env.MEMORY_REPOSITORY === "supabase" ? "supabase" : "local_file";
+  const repositoryMode = resolveMemoryRepositoryMode();
   const smokeProof = deploymentSmokeProof();
   const liveSmokeVerified = smokeProof.verified;
   const liveSchemaResult = options.schemaCheck ? await options.schemaCheck() : supabaseServiceConfigured() ? await checkSupabaseSchema() : undefined;
@@ -1084,7 +1085,7 @@ export async function getLaunchReadinessReport(options: LaunchReadinessOptions =
           ? "Memory repository is running on Supabase."
           : `Memory repository is currently ${repositoryMode}; acceptable for prototype, not final multi-user launch.`
     },
-    supabaseHouseholdReadinessCheck(repositoryMode, defaultHouseholdBinding),
+    supabaseHouseholdReadinessCheck(repositoryMode === "memory_only" ? "local_file" : repositoryMode, defaultHouseholdBinding),
     schemaReadinessCheck(liveSchemaResult, liveAppliedMigrations),
     {
       id: "usage_limits",

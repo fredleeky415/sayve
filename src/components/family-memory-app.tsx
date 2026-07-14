@@ -51,6 +51,7 @@ type HouseholdOption = { id: string; name: string; role: string };
 type InitStep = 0 | 1 | 2;
 type RecordedVoice = { blob: Blob; fileName: string; mimeType: string };
 const tabOrder: Tab[] = ["chat", "home", "dashboard"];
+const transientApiStates = new Set(["temporary_unavailable"]);
 
 const capturePlaceholders = [
   "例如：家庭聚餐 HK$3000",
@@ -77,13 +78,15 @@ export function conversationRequestBody(question: string, householdId: string) {
   return { question, householdId };
 }
 
-async function postJson(path: string, body: Record<string, unknown>) {
-  const response = await fetch(path, {
-    method: "POST",
-    credentials: "same-origin",
-    headers: { "content-type": "application/json", ...storedAuthHeaders() },
-    body: JSON.stringify(body)
-  });
+export function shouldRetryApiResult(result: Partial<ApiResult> | null | undefined, status?: number) {
+  return status === 503 || Boolean(result?.current_state && transientApiStates.has(result.current_state));
+}
+
+async function pause(ms: number) {
+  await new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function parseApiResult(response: Response) {
   const payload = (await response.json()) as Partial<ApiResult> & { error?: string; protection?: { vercel_auth_enabled?: boolean } };
   if (
     typeof payload.current_state === "string" &&
@@ -91,12 +94,33 @@ async function postJson(path: string, body: Record<string, unknown>) {
     "confidence" in payload &&
     "source_refs" in payload
   ) {
-    return payload as ApiResult;
+    return { payload: payload as ApiResult, status: response.status };
   }
   if (payload.error === "private_beta_access_required" || payload.protection?.vercel_auth_enabled) {
-    return captureFailedResult("私測登入好似過期咗，重新開一次 Sayve 入口再試。");
+    return { payload: captureFailedResult("私測登入好似過期咗，重新開一次 Sayve 入口再試。"), status: response.status };
   }
-  return captureFailedResult();
+  return { payload: captureFailedResult(), status: response.status };
+}
+
+async function postJson(path: string, body: Record<string, unknown>) {
+  let lastResult: ApiResult | null = null;
+  let lastStatus: number | undefined;
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const response = await fetch(path, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "content-type": "application/json", ...storedAuthHeaders() },
+      body: JSON.stringify(body)
+    });
+    const { payload, status } = await parseApiResult(response);
+    lastResult = payload;
+    lastStatus = status;
+    if (!shouldRetryApiResult(payload, status) || attempt === 1) return payload;
+    await pause(240);
+  }
+
+  return lastResult ?? captureFailedResult(lastStatus === 503 ? "暫時未儲到，稍後再試一次。" : undefined);
 }
 
 function confidenceText(result: ApiResult) {
@@ -637,25 +661,26 @@ export function FamilyMemoryApp() {
     form.append("file", file);
     if (transcript?.trim()) form.append("transcript", transcript.trim());
     if (householdId?.trim()) form.append("householdId", householdId.trim());
-    const response = await fetch("/api/captures/voice", {
-      method: "POST",
-      credentials: "same-origin",
-      headers: storedAuthHeaders(),
-      body: form
-    });
-    const payload = (await response.json()) as Partial<ApiResult> & { error?: string; protection?: { vercel_auth_enabled?: boolean } };
-    if (
-      typeof payload.current_state === "string" &&
-      typeof payload.needs_user_input === "boolean" &&
-      "confidence" in payload &&
-      "source_refs" in payload
-    ) {
-      return payload as ApiResult;
+    let lastResult: ApiResult | null = null;
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const response = await fetch("/api/captures/voice", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: storedAuthHeaders(),
+        body: form
+      });
+      const { payload, status } = await parseApiResult(response);
+      lastResult = payload;
+      if (!shouldRetryApiResult(payload, status) || attempt === 1) break;
+      await pause(240);
     }
-    if (payload.error === "private_beta_access_required" || payload.protection?.vercel_auth_enabled) {
-      return captureFailedResult("私測登入好似過期咗，重新開一次 Sayve 入口再試。");
+
+    if (!lastResult) return captureFailedResult("暫時未儲到錄音，稍後再試一次。");
+    if (lastResult.current_state === "capture_failed" && !lastResult.next_best_question) {
+      return captureFailedResult("暫時未儲到錄音，稍後再試一次。");
     }
-    return captureFailedResult("暫時未儲到錄音，稍後再試一次。");
+    return lastResult;
   }
 
   function voiceFileFromRecordedVoice(voice: RecordedVoice) {
@@ -799,25 +824,26 @@ export function FamilyMemoryApp() {
     form.append("file", file);
     form.append("note", note || file.name);
     if (householdId?.trim()) form.append("householdId", householdId.trim());
-    const response = await fetch("/api/captures/receipt", {
-      method: "POST",
-      credentials: "same-origin",
-      headers: storedAuthHeaders(),
-      body: form
-    });
-    const payload = (await response.json()) as Partial<ApiResult> & { error?: string; protection?: { vercel_auth_enabled?: boolean } };
-    if (
-      typeof payload.current_state === "string" &&
-      typeof payload.needs_user_input === "boolean" &&
-      "confidence" in payload &&
-      "source_refs" in payload
-    ) {
-      return payload as ApiResult;
+    let lastResult: ApiResult | null = null;
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const response = await fetch("/api/captures/receipt", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: storedAuthHeaders(),
+        body: form
+      });
+      const { payload, status } = await parseApiResult(response);
+      lastResult = payload;
+      if (!shouldRetryApiResult(payload, status) || attempt === 1) break;
+      await pause(240);
     }
-    if (payload.error === "private_beta_access_required" || payload.protection?.vercel_auth_enabled) {
-      return captureFailedResult("私測登入好似過期咗，重新開一次 Sayve 入口再試。");
+
+    if (!lastResult) return captureFailedResult("暫時未儲到收據相，稍後再試一次。");
+    if (lastResult.current_state === "capture_failed" && !lastResult.next_best_question) {
+      return captureFailedResult("暫時未儲到收據相，稍後再試一次。");
     }
-    return captureFailedResult("暫時未儲到收據相，稍後再試一次。");
+    return lastResult;
   }
 
   async function submitPhoto(file: File) {

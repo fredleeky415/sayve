@@ -523,6 +523,8 @@ export function FamilyMemoryApp() {
     setSession(null);
     setHouseholds([]);
     setSelectedHouseholdId("");
+    setHouseholdStatus(null);
+    setHouseholdsResolved(false);
     clearStoredBrowserAuth({ household: true });
   }
 
@@ -560,6 +562,7 @@ export function FamilyMemoryApp() {
       }
 
       const link = result.data?.privateBetaInviteUrl ?? result.data?.inviteUrl ?? "";
+      void refreshHouseholdStatus(householdId);
       if (!input?.quiet) {
         setInviteLink(link);
         setInviteCopied(false);
@@ -620,6 +623,8 @@ export function FamilyMemoryApp() {
       }
       setHouseholds([result.household]);
       setSelectedHouseholdId(result.household.id);
+      setHouseholdsResolved(true);
+      void refreshHouseholdStatus(result.household.id);
       if (initInviteMode === "partner" && initPartnerEmail.trim()) {
         const created = await createHouseholdInviteLink({
           email: initPartnerEmail,

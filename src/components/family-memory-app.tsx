@@ -133,6 +133,10 @@ export function householdReadyForInteraction(accessToken: string | null | undefi
   return Boolean(householdId);
 }
 
+export function shouldResetTransientMemoryView(previousHouseholdId: string, nextHouseholdId: string) {
+  return Boolean(previousHouseholdId) && Boolean(nextHouseholdId) && previousHouseholdId !== nextHouseholdId;
+}
+
 export function shouldRefreshViewsAfterResult(result: ApiResult | null | undefined) {
   if (!result) return false;
   if (result.current_state === "capture_received" || result.current_state === "capture_failed") return false;
@@ -281,6 +285,7 @@ export function FamilyMemoryApp() {
   const [initialInviteState, setInitialInviteState] = useState<InitialInviteState | null>(null);
   const [initBusy, setInitBusy] = useState(false);
   const swipeStartRef = useRef<{ x: number; y: number; lastX: number; lastY: number } | null>(null);
+  const previousHouseholdIdRef = useRef("");
   const [isMobileLayout, setIsMobileLayout] = useState(false);
   const homeFileInputRef = useRef<HTMLInputElement>(null);
   const chatFileInputRef = useRef<HTMLInputElement>(null);
@@ -378,6 +383,22 @@ export function FamilyMemoryApp() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (selectedHouseholdId) window.localStorage.setItem(authStorageKeys.householdId, selectedHouseholdId);
+    else window.localStorage.removeItem(authStorageKeys.householdId);
+  }, [selectedHouseholdId]);
+
+  useEffect(() => {
+    const previousHouseholdId = previousHouseholdIdRef.current;
+    if (shouldResetTransientMemoryView(previousHouseholdId, selectedHouseholdId)) {
+      setMessages([]);
+      setLatest(null);
+      setText("");
+      setCaptureMode("text");
+      clearPendingPhotos();
+      setRecordedVoice(null);
+      setVoiceStatus("idle");
+      setVoiceSeconds(0);
+    }
+    previousHouseholdIdRef.current = selectedHouseholdId;
   }, [selectedHouseholdId]);
 
   useEffect(() => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { conversationRequestBody, householdCanWrite, householdReadyForInteraction, shouldBlockSwipeStart, shouldPreserveHouseholdsOnRefreshFailure, shouldRefreshViewsAfterResult, shouldRetryApiResult, shouldShowInitialization, swipeDirection } from "./family-memory-app";
+import { conversationRequestBody, householdCanWrite, householdReadyForInteraction, shouldBlockSwipeStart, shouldPreserveHouseholdsOnRefreshFailure, shouldRefreshViewsAfterResult, shouldResetTransientMemoryView, shouldRetryApiResult, shouldShowInitialization, swipeDirection } from "./family-memory-app";
 
 describe("family memory app conversation routing", () => {
   it("always carries the selected household into ask requests", () => {
@@ -62,6 +62,13 @@ describe("family memory app conversation routing", () => {
     expect(householdReadyForInteraction("token", true, "")).toBe(false);
     expect(householdReadyForInteraction("token", true, "household_lee")).toBe(true);
     expect(householdReadyForInteraction(undefined, false, "")).toBe(true);
+  });
+
+  it("drops stale chat and capture state when switching to another household", () => {
+    expect(shouldResetTransientMemoryView("", "lee")).toBe(false);
+    expect(shouldResetTransientMemoryView("lee", "")).toBe(false);
+    expect(shouldResetTransientMemoryView("lee", "lee")).toBe(false);
+    expect(shouldResetTransientMemoryView("lee", "chan")).toBe(true);
   });
 
   it("refreshes dashboard-facing views only after a successful non-review capture result", () => {

@@ -37,6 +37,15 @@ function bearerToken(request: Request): string | undefined {
   return match?.[1]?.trim();
 }
 
+export function requestHouseholdHeaderId(request: Request): string | undefined {
+  const householdId = request.headers.get("x-household-id")?.trim();
+  return householdId ? householdId : undefined;
+}
+
+export function requestHasSupabaseBearerToken(request: Request): boolean {
+  return Boolean(bearerToken(request));
+}
+
 function authError(status: number, currentState: string, question: string): RequestAuthResult {
   return {
     ok: false,

@@ -1,10 +1,13 @@
 import { invalidJsonResponse, readJsonObject } from "@/server/api/json";
-import { isSupabaseAuthRequired, resolveRequestAuthContext } from "@/server/auth/request-context";
+import { isSupabaseAuthRequired, requestHasSupabaseBearerToken, requestHouseholdHeaderId, resolveRequestAuthContext } from "@/server/auth/request-context";
 import { requestMemorySplit } from "@/server/memory/engine";
 import { noStoreJson } from "@/server/api/http";
 
 export async function POST(request: Request) {
-  const authBeforeBody = isSupabaseAuthRequired() ? await resolveRequestAuthContext(request) : undefined;
+  const authBeforeBody =
+    isSupabaseAuthRequired() && (!requestHasSupabaseBearerToken(request) || requestHouseholdHeaderId(request))
+      ? await resolveRequestAuthContext(request)
+      : undefined;
   if (authBeforeBody && !authBeforeBody.ok) return authBeforeBody.response;
 
   let body: Record<string, unknown>;

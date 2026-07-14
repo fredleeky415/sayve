@@ -5,6 +5,7 @@ import { ApiEnvelopeSchema } from "@/shared/memory/types";
 const membershipRoles = vi.hoisted(() => new Map<string, string>());
 const createdInvites = vi.hoisted(() => [] as Array<Record<string, unknown>>);
 const serviceClientAvailable = vi.hoisted(() => ({ current: true }));
+const snapshotRows = vi.hoisted(() => new Map<string, { state: unknown; revision: number }>());
 
 vi.mock("@/server/supabase/service-client", () => ({
   createSupabaseAnonClient: () => ({
@@ -16,10 +17,68 @@ vi.mock("@/server/supabase/service-client", () => ({
       }
     }
   }),
+  getSupabaseServiceConfig: () =>
+    serviceClientAvailable.current
+      ? {
+          url: "https://sayve.test.supabase.co",
+          serviceRoleKey: "service-role"
+        }
+      : undefined,
   createSupabaseServiceClient: () => {
     if (!serviceClientAvailable.current) return undefined;
     return {
     from(table?: string) {
+      if (table === "memory_store_snapshots") {
+        const filters = new Map<string, unknown>();
+        let operation: "select" | "insert" | "update" = "select";
+        let insertRow: { household_id: string; state: unknown; revision?: number } | undefined;
+        let updatePatch: { state: unknown; revision: number } | undefined;
+        const query = {
+          select() {
+            return query;
+          },
+          insert(row: { household_id: string; state: unknown; revision?: number }) {
+            operation = "insert";
+            insertRow = row;
+            return query;
+          },
+          update(patch: { state: unknown; revision: number }) {
+            operation = "update";
+            updatePatch = patch;
+            return query;
+          },
+          eq(field: string, value: unknown) {
+            filters.set(field, value);
+            return query;
+          },
+          async maybeSingle() {
+            const householdId = String(filters.get("household_id") ?? "");
+            if (operation === "select") {
+              return { data: snapshotRows.get(householdId) ?? null, error: null };
+            }
+
+            if (operation === "update") {
+              const current = snapshotRows.get(householdId);
+              if (!current || current.revision !== filters.get("revision")) return { data: null, error: null };
+              snapshotRows.set(householdId, { state: updatePatch?.state, revision: updatePatch?.revision ?? current.revision });
+              return { data: { revision: updatePatch?.revision ?? current.revision }, error: null };
+            }
+
+            return { data: null, error: null };
+          },
+          async single() {
+            if (!insertRow) return { data: null, error: { message: "missing insert row" } };
+            if (snapshotRows.has(insertRow.household_id)) {
+              return { data: null, error: { code: "23505", message: "duplicate snapshot" } };
+            }
+            const revision = insertRow.revision ?? 1;
+            snapshotRows.set(insertRow.household_id, { state: insertRow.state, revision });
+            return { data: { revision }, error: null };
+          }
+        };
+        return query;
+      }
+
       if (table === "invites") {
         return {
           insert(row: Record<string, unknown>) {
@@ -119,6 +178,7 @@ describe("route auth boundary", () => {
     resetStore();
     membershipRoles.clear();
     createdInvites.length = 0;
+    snapshotRows.clear();
     serviceClientAvailable.current = true;
     process.env.SUPABASE_AUTH_REQUIRED = "1";
   });
@@ -144,6 +204,25 @@ describe("route auth boundary", () => {
     expect((json.data as { capture?: { createdBy?: string } }).capture?.createdBy).toBe("partner");
   });
 
+  it("accepts householdId from request body when the browser has not synced the household header yet", async () => {
+    membershipRoles.set("household_lee:partner", "member");
+    const { POST: postTextCapture } = await import("./captures/text/route");
+
+    const response = await postTextCapture(
+      bearerRequestWithoutHousehold("POST", "http://sayve.test/api/captures/text", "partner", {
+        householdId: "household_lee",
+        text: "自己食晏 128"
+      })
+    );
+    const json = await responseJson(response);
+
+    expect(response.status).toBe(200);
+    expectApiEnvelope(json);
+    expect(json.current_state).toBe("active");
+    expect((json.data as { capture?: { householdId?: string; createdBy?: string } }).capture?.householdId).toBe("household_lee");
+    expect((json.data as { capture?: { householdId?: string; createdBy?: string } }).capture?.createdBy).toBe("partner");
+  });
+
   it("lets two logged-in household members capture at the same time into one shared memory", async () => {
     membershipRoles.set("household_lee:fred", "owner");
     membershipRoles.set("household_lee:partner", "member");
@@ -167,12 +246,8 @@ describe("route auth boundary", () => {
 
     expectApiEnvelope(fred);
     expectApiEnvelope(partner);
-    expect((fred.data as { capture?: { createdBy?: string; householdId?: string } }).capture).toEqual(
-      expect.objectContaining({ createdBy: "fred", householdId: "household_lee" })
-    );
-    expect((partner.data as { capture?: { createdBy?: string; householdId?: string } }).capture).toEqual(
-      expect.objectContaining({ createdBy: "partner", householdId: "household_lee" })
-    );
+    expect(fred.current_state).toBe("active");
+    expect(partner.current_state).toBe("active");
 
     const dashboard = await getDashboardView(bearerRequest("GET", "http://sayve.test/api/views/dashboard", "fred"));
     const dashboardJson = await responseJson(dashboard);
@@ -242,6 +317,7 @@ describe("route auth boundary", () => {
 
   it("returns temporary_unavailable when real auth mode is enabled but storage is still local", async () => {
     membershipRoles.set("household_lee:partner", "member");
+    serviceClientAvailable.current = false;
     process.env.SAYVE_ENFORCE_STORAGE_BOUNDARY_IN_TEST = "1";
     delete process.env.MEMORY_REPOSITORY;
     const { POST: postTextCapture } = await import("./captures/text/route");

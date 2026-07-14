@@ -3,7 +3,7 @@ import { aiModels } from "@/server/ai/models";
 import { captureMemory } from "@/server/memory/engine";
 import { recordAiTelemetryAsync } from "@/server/memory/telemetry";
 import { invalidJsonResponse, readJsonObject, unexpectedApiErrorResponse } from "@/server/api/json";
-import { isSupabaseAuthRequired, resolveRequestAuthContext } from "@/server/auth/request-context";
+import { isSupabaseAuthRequired, requestHasSupabaseBearerToken, requestHouseholdHeaderId, resolveRequestAuthContext } from "@/server/auth/request-context";
 import { CaptureMediaStorageError, storeCaptureFile } from "@/server/media/storage";
 import { noStoreJson } from "@/server/api/http";
 
@@ -11,7 +11,10 @@ export async function POST(request: Request) {
   try {
     const contentType = request.headers.get("content-type") ?? "";
     if (contentType.includes("multipart/form-data")) {
-    const authBeforeUpload = isSupabaseAuthRequired() ? await resolveRequestAuthContext(request) : undefined;
+    const authBeforeUpload =
+      isSupabaseAuthRequired() && (!requestHasSupabaseBearerToken(request) || requestHouseholdHeaderId(request))
+        ? await resolveRequestAuthContext(request)
+        : undefined;
     if (authBeforeUpload && !authBeforeUpload.ok) return authBeforeUpload.response;
 
     const form = await request.formData();
@@ -102,7 +105,10 @@ export async function POST(request: Request) {
       return noStoreJson(result);
     }
 
-    const authBeforeBody = isSupabaseAuthRequired() ? await resolveRequestAuthContext(request) : undefined;
+    const authBeforeBody =
+      isSupabaseAuthRequired() && (!requestHasSupabaseBearerToken(request) || requestHouseholdHeaderId(request))
+        ? await resolveRequestAuthContext(request)
+        : undefined;
     if (authBeforeBody && !authBeforeBody.ok) return authBeforeBody.response;
 
     let body: Record<string, unknown>;

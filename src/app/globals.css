@@ -245,6 +245,58 @@ b {
   gap: 6px;
 }
 
+.householdStatusCard {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.householdStatusStats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.householdStatusStats div,
+.householdRosterRow,
+.householdPendingInviteRow {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.householdStatusStats strong,
+.householdRosterRow strong,
+.householdPendingInviteRow strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.householdStatusStats span,
+.householdRosterRow span,
+.householdPendingInvites > span,
+.householdPendingInviteRow small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.householdRoster,
+.householdPendingInvites {
+  display: grid;
+  gap: 8px;
+}
+
+.householdRosterRow,
+.householdPendingInviteRow {
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
 .inviteMemberBox {
   display: grid;
   gap: 8px;

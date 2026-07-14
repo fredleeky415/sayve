@@ -48,6 +48,21 @@ type Tab = "home" | "chat" | "dashboard";
 type CaptureMode = "text" | "photo" | "voice";
 type VoiceStatus = "idle" | "recording" | "ready";
 type HouseholdOption = { id: string; name: string; role: string };
+type HouseholdStatus = {
+  householdId: string;
+  householdName: string;
+  role: string;
+  memberCount: number;
+  ownerCount: number;
+  memberRoleCount: number;
+  viewerCount: number;
+  currentUserId: string;
+  members: Array<{ label: string; role: string; isCurrentUser: boolean }>;
+  pendingInvites: Array<{ email: string; role: string; expiresAt: string }>;
+  pendingInviteCount: number;
+  acceptedInviteCount: number;
+  expiredInviteCount: number;
+};
 type InitStep = 0 | 1 | 2;
 type RecordedVoice = { blob: Blob; fileName: string; mimeType: string };
 type InitialInviteState = { email: string; link: string; householdName: string };
@@ -221,6 +236,7 @@ export function FamilyMemoryApp() {
   const [session, setSession] = useState<BrowserSession | null>(null);
   const [households, setHouseholds] = useState<HouseholdOption[]>([]);
   const [selectedHouseholdId, setSelectedHouseholdId] = useState("");
+  const [householdStatus, setHouseholdStatus] = useState<HouseholdStatus | null>(null);
   const [prototypeUserId, setPrototypeUserId] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteLink, setInviteLink] = useState("");
@@ -248,6 +264,29 @@ export function FamilyMemoryApp() {
 
   function syncBrowserSession(nextSession: Parameters<typeof storeBrowserSession>[0]) {
     setSession(storeBrowserSession(nextSession));
+  }
+
+  async function refreshHouseholdStatus(householdIdOverride?: string) {
+    const householdId = householdIdOverride ?? selectedHouseholdId;
+    if (!householdId) {
+      setHouseholdStatus(null);
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/households/status?householdId=${encodeURIComponent(householdId)}`, {
+        credentials: "same-origin",
+        headers: storedAuthHeaders()
+      });
+      const result = (await response.json()) as {
+        ok?: boolean;
+        data?: HouseholdStatus;
+      };
+      if (!response.ok || !result.ok || !result.data) return;
+      setHouseholdStatus(result.data);
+    } catch {
+      // Keep the last good status visible during transient failures.
+    }
   }
 
   useEffect(() => {
@@ -309,6 +348,7 @@ export function FamilyMemoryApp() {
     if (session?.accessToken || prototypeUserId) return;
     setHouseholds([]);
     setSelectedHouseholdId("");
+    setHouseholdStatus(null);
     setInviteLink("");
     setInviteEmail("");
   }, [prototypeUserId, session?.accessToken]);
@@ -347,6 +387,7 @@ export function FamilyMemoryApp() {
     setHouseholds(nextHouseholds);
     if (nextHouseholds.length === 0) {
       setSelectedHouseholdId("");
+      setHouseholdStatus(null);
       setAuthMessage(session?.accessToken ? "呢個帳戶未加入任何家庭。" : "");
       return;
     }
@@ -354,7 +395,11 @@ export function FamilyMemoryApp() {
     setAuthMessage("");
     if (nextHouseholds.length > 0 && !nextHouseholds.some((household) => household.id === selectedHouseholdId)) {
       setSelectedHouseholdId(nextHouseholds[0].id);
+      void refreshHouseholdStatus(nextHouseholds[0].id);
+      return;
     }
+
+    void refreshHouseholdStatus(selectedHouseholdId || nextHouseholds[0].id);
   }
 
   async function syncBrowserStateFromStorage() {
@@ -384,6 +429,11 @@ export function FamilyMemoryApp() {
     void refreshHouseholds();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.accessToken, prototypeUserId]);
+
+  useEffect(() => {
+    void refreshHouseholdStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedHouseholdId, session?.accessToken, prototypeUserId]);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -1158,6 +1208,46 @@ export function FamilyMemoryApp() {
                 ))}
               </select>
             </label>
+          )}
+
+          {householdStatus && (
+            <div className="householdStatusCard">
+              <div className="householdStatusStats">
+                <div>
+                  <strong>{householdStatus.memberCount}</strong>
+                  <span>已加入</span>
+                </div>
+                <div>
+                  <strong>{householdStatus.pendingInviteCount}</strong>
+                  <span>等緊接受</span>
+                </div>
+                <div>
+                  <strong>{householdStatus.expiredInviteCount}</strong>
+                  <span>已過期</span>
+                </div>
+              </div>
+
+              <div className="householdRoster">
+                {householdStatus.members.map((member) => (
+                  <div className="householdRosterRow" key={`${member.label}-${member.role}`}>
+                    <strong>{member.label}</strong>
+                    <span>{member.isCurrentUser ? "你而家登入緊" : member.role}</span>
+                  </div>
+                ))}
+              </div>
+
+              {householdStatus.pendingInvites.length > 0 && (
+                <div className="householdPendingInvites">
+                  <span>未加入成員</span>
+                  {householdStatus.pendingInvites.map((invite) => (
+                    <div className="householdPendingInviteRow" key={`${invite.email}-${invite.expiresAt}`}>
+                      <strong>{invite.email}</strong>
+                      <small>{invite.role}</small>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
 
           {session && selectedHousehold?.role === "owner" && (

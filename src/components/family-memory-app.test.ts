@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { conversationRequestBody, householdCanWrite, householdReadyForInteraction, shouldPreserveHouseholdsOnRefreshFailure, shouldRefreshViewsAfterResult, shouldRetryApiResult, shouldShowInitialization, swipeDirection } from "./family-memory-app";
+import { conversationRequestBody, householdCanWrite, householdReadyForInteraction, shouldBlockSwipeStart, shouldPreserveHouseholdsOnRefreshFailure, shouldRefreshViewsAfterResult, shouldRetryApiResult, shouldShowInitialization, swipeDirection } from "./family-memory-app";
 
 describe("family memory app conversation routing", () => {
   it("always carries the selected household into ask requests", () => {
@@ -38,6 +38,16 @@ describe("family memory app conversation routing", () => {
     expect(swipeDirection(20, 1, 390)).toBeNull();
     expect(swipeDirection(-42, 70, 390)).toBeNull();
     expect(swipeDirection(-70, 8, 1024)).toBeNull();
+  });
+
+  it("allows swipe to start around the capture bar but not while typing or pressing controls", () => {
+    const inputTarget = { closest: () => null } as unknown as EventTarget;
+    const buttonTarget = { closest: (selector: string) => (selector.includes("button") ? {} : null) } as unknown as EventTarget;
+    const activeInput = { matches: (selector: string) => selector.includes("input") } as unknown as Element;
+
+    expect(shouldBlockSwipeStart(inputTarget, null)).toBe(false);
+    expect(shouldBlockSwipeStart(buttonTarget, null)).toBe(true);
+    expect(shouldBlockSwipeStart(inputTarget, activeInput)).toBe(true);
   });
 
   it("only opens initialization after household loading has truly resolved empty", () => {

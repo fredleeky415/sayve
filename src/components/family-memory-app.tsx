@@ -113,6 +113,16 @@ export function swipeDirection(deltaX: number, deltaY: number, viewportWidth: nu
   return deltaX > 0 ? -1 : 1;
 }
 
+export function shouldBlockSwipeStart(target: EventTarget | null, activeElement?: Element | null) {
+  const targetElement = target as HTMLElement | null;
+  if (targetElement?.closest("button, select, a, [data-sayve-no-swipe='true']")) return true;
+
+  const currentActive = activeElement as HTMLElement | null;
+  if (currentActive?.matches("input, textarea, [contenteditable='true']")) return true;
+
+  return false;
+}
+
 export function shouldShowInitialization(accessToken: string | null | undefined, householdsResolved: boolean, householdCount: number, authMessage: string) {
   return Boolean(accessToken) && householdsResolved && householdCount === 0 && authMessage === "呢個帳戶未加入任何家庭。";
 }
@@ -875,7 +885,7 @@ export function FamilyMemoryApp() {
   }
 
   function canStartSwipe(target: EventTarget | null) {
-    return !((target as HTMLElement | null)?.closest("input, textarea, button, select, a"));
+    return !shouldBlockSwipeStart(target, typeof document === "undefined" ? null : document.activeElement);
   }
 
   useEffect(() => {

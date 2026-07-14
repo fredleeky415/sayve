@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { conversationRequestBody, shouldPreserveHouseholdsOnRefreshFailure, shouldRetryApiResult } from "./family-memory-app";
+import { conversationRequestBody, householdCanWrite, shouldPreserveHouseholdsOnRefreshFailure, shouldRetryApiResult } from "./family-memory-app";
 
 describe("family memory app conversation routing", () => {
   it("always carries the selected household into ask requests", () => {
@@ -23,5 +23,12 @@ describe("family memory app conversation routing", () => {
     expect(shouldPreserveHouseholdsOnRefreshFailure(households, "login_required", 401)).toBe(true);
     expect(shouldPreserveHouseholdsOnRefreshFailure(households, "household_access_denied", 403)).toBe(false);
     expect(shouldPreserveHouseholdsOnRefreshFailure([], "temporary_unavailable", 503)).toBe(false);
+  });
+
+  it("treats owner and member as writable but blocks viewer", () => {
+    expect(householdCanWrite("owner")).toBe(true);
+    expect(householdCanWrite("member")).toBe(true);
+    expect(householdCanWrite("viewer")).toBe(false);
+    expect(householdCanWrite(undefined)).toBe(false);
   });
 });

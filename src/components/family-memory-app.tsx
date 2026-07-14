@@ -88,6 +88,10 @@ export function shouldPreserveHouseholdsOnRefreshFailure(existingHouseholds: Hou
   return status === 503 || error === "temporary_unavailable" || error === "login_required";
 }
 
+export function householdCanWrite(role?: string) {
+  return role === "owner" || role === "member";
+}
+
 async function pause(ms: number) {
   await new Promise((resolve) => window.setTimeout(resolve, ms));
 }
@@ -230,6 +234,7 @@ export function FamilyMemoryApp() {
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const voiceChunksRef = useRef<Blob[]>([]);
   const selectedHousehold = households.find((household) => household.id === selectedHouseholdId);
+  const selectedHouseholdCanWrite = householdCanWrite(selectedHousehold?.role);
 
   useEffect(() => {
     setCapturePlaceholder(randomPlaceholder());
@@ -779,6 +784,10 @@ export function FamilyMemoryApp() {
   async function submitHomeText(event?: FormEvent) {
     event?.preventDefault();
     if (!text.trim()) return;
+    if (!selectedHouseholdCanWrite) {
+      setLatest(captureFailedResult("你而家係只讀成員，可以問 Sayve，但未可以記低。"));
+      return;
+    }
     if (!requireMemoryAccess()) return;
     const prompt = text.trim();
     setText("");
@@ -798,8 +807,18 @@ export function FamilyMemoryApp() {
   async function submitChatText(event?: FormEvent) {
     event?.preventDefault();
     if (!text.trim()) return;
-    if (!requireMemoryAccess()) return;
     const prompt = text.trim();
+    if (!selectedHouseholdCanWrite && !looksLikeQuestion(prompt)) {
+      setMessages((current) => [
+        ...current,
+        { id: crypto.randomUUID(), role: "user", content: prompt },
+        { id: crypto.randomUUID(), role: "assistant", content: "你而家係只讀成員，可以問 Sayve，但未可以記低。" }
+      ]);
+      setText("");
+      rotateCapturePlaceholder();
+      return;
+    }
+    if (!requireMemoryAccess()) return;
     setBusy(true);
     setMessages((current) => [...current, { id: crypto.randomUUID(), role: "user", content: prompt }]);
     const result = looksLikeQuestion(prompt)
@@ -823,6 +842,11 @@ export function FamilyMemoryApp() {
   }
 
   async function submitVoice() {
+    if (!selectedHouseholdCanWrite) {
+      setLatest(captureFailedResult("你而家係只讀成員，可以問 Sayve，但未可以記低。"));
+      resetVoiceComposer();
+      return;
+    }
     if (!requireMemoryAccess()) return;
     const typedText = text.trim();
     const prompt = typedText || `Voice note ${formatVoiceTime(voiceSeconds)}`;
@@ -903,6 +927,12 @@ export function FamilyMemoryApp() {
   }
 
   async function submitPhoto(file: File) {
+    if (!selectedHouseholdCanWrite) {
+      setLatest(captureFailedResult("你而家係只讀成員，可以問 Sayve，但未可以記低。"));
+      clearPendingPhotos();
+      setCaptureMode("text");
+      return;
+    }
     if (!requireMemoryAccess()) return;
     setBusy(true);
     const result = await uploadPhoto(file, text.trim(), selectedHouseholdId);
@@ -923,6 +953,12 @@ export function FamilyMemoryApp() {
 
   async function submitPendingPhotos() {
     if (pendingPhotos.length === 0) return;
+    if (!selectedHouseholdCanWrite) {
+      setLatest(captureFailedResult("你而家係只讀成員，可以問 Sayve，但未可以記低。"));
+      clearPendingPhotos();
+      setCaptureMode("text");
+      return;
+    }
     if (!requireMemoryAccess()) return;
     const files = [...pendingPhotos];
     const note = text.trim();
@@ -1247,6 +1283,7 @@ export function FamilyMemoryApp() {
           <div className="heroPrompt">
             <p>Sayve</p>
             <h1>跟 Sayve 說一件事</h1>
+            {!selectedHouseholdCanWrite && selectedHousehold ? <span className="roleHint">你而家用緊只讀模式，可以問 Sayve，但未可以記低。</span> : null}
           </div>
 
           <form className="captureComposer" onSubmit={submitHomeText}>
@@ -1261,9 +1298,10 @@ export function FamilyMemoryApp() {
                     void submitHomeText();
                   }
                 }}
-                placeholder={capturePlaceholder}
+                placeholder={selectedHouseholdCanWrite ? capturePlaceholder : "只讀模式：你可以問 Sayve 家庭狀況"}
+                disabled={!selectedHouseholdCanWrite}
               />
-              <button type="submit" className="captureInlineSend" disabled={!text.trim()} title="Send">
+              <button type="submit" className="captureInlineSend" disabled={!text.trim() || !selectedHouseholdCanWrite} title="Send">
                 <Send size={18} />
               </button>
             </div>
@@ -1287,10 +1325,11 @@ export function FamilyMemoryApp() {
                 aria-label="影相"
                 title="影相"
                 onClick={() => {
+                  if (!selectedHouseholdCanWrite) return;
                   setCaptureMode("photo");
                   fileInputRef.current?.click();
                 }}
-                disabled={false}
+                disabled={!selectedHouseholdCanWrite}
               >
                 <Camera size={20} />
               </button>
@@ -1300,7 +1339,7 @@ export function FamilyMemoryApp() {
                 aria-label="錄音"
                 title="錄音"
                 onClick={startVoiceStub}
-                disabled={false}
+                disabled={!selectedHouseholdCanWrite}
               >
                 <Mic size={20} />
               </button>
@@ -1390,7 +1429,11 @@ export function FamilyMemoryApp() {
           <div className="heroPrompt">
             <p>Ask</p>
             <h1>問一問 Sayve</h1>
-            <span>可以問家庭財務狀況，也可以直接講一件新發生的事。</span>
+            <span>
+              {selectedHouseholdCanWrite
+                ? "可以問家庭財務狀況，也可以直接講一件新發生的事。"
+                : "你而家用緊只讀模式，可以問家庭財務狀況。"}
+            </span>
           </div>
 
           {messages.length > 0 && (
@@ -1408,7 +1451,11 @@ export function FamilyMemoryApp() {
               aria-label="跟 Sayve 對話"
               value={text}
               onChange={(event) => setText(event.target.value)}
-              placeholder="例如：今日喺大家樂食飯 HK$300 / 上個月食飯用左幾多錢？"
+              placeholder={
+                selectedHouseholdCanWrite
+                  ? "例如：今日喺大家樂食飯 HK$300 / 上個月食飯用左幾多錢？"
+                  : "例如：上個月食飯用左幾多錢？"
+              }
               rows={3}
             />
             <div className="composerActions">
@@ -1423,10 +1470,10 @@ export function FamilyMemoryApp() {
                   event.currentTarget.value = "";
                 }}
               />
-              <button type="button" className="iconButton" onClick={() => fileInputRef.current?.click()} disabled={busy} title="Photo">
+              <button type="button" className="iconButton" onClick={() => fileInputRef.current?.click()} disabled={busy || !selectedHouseholdCanWrite} title="Photo">
                 <Camera size={20} />
               </button>
-              <button type="button" className="iconButton" onClick={submitVoice} disabled={busy || !text.trim()} title="Voice">
+              <button type="button" className="iconButton" onClick={submitVoice} disabled={busy || !text.trim() || !selectedHouseholdCanWrite} title="Voice">
                 <Mic size={20} />
               </button>
               <button type="submit" className="sendButton" disabled={busy || !text.trim()} title="Send">

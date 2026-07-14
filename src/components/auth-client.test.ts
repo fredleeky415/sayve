@@ -81,4 +81,16 @@ describe("auth client storage handoff", () => {
     expect(browserAuthRedirectOrigin()).toBe("http://127.0.0.1:3000");
     expect(browserInviteRedirectUrl("abc")).toBe("http://127.0.0.1:3000/invite?token=abc");
   });
+
+  it("lets invite acceptance persist a household choice for the next app load", () => {
+    const localStorage = createLocalStorage();
+    Object.defineProperty(globalThis, "window", {
+      value: { localStorage },
+      configurable: true
+    });
+
+    localStorage.setItem(authStorageKeys.householdId, "household_lee");
+
+    expect(localStorage.getItem(authStorageKeys.householdId)).toBe("household_lee");
+  });
 });

@@ -215,7 +215,10 @@ export function InviteAcceptance({ inviteToken }: { inviteToken: string }) {
       const householdId = result.data?.householdId ?? "";
       if (householdId) window.localStorage.setItem(authStorageKeys.householdId, householdId);
       setAcceptedHouseholdId(householdId);
-      setMessage(result.data?.role === "viewer" ? "已加入，只讀權限。" : "已加入家庭記憶。");
+      setMessage(result.data?.role === "viewer" ? "已加入，只讀權限。正在帶你返回 Sayve..." : "已加入家庭記憶。正在帶你返回 Sayve...");
+      window.setTimeout(() => {
+        window.location.assign("/");
+      }, 220);
     } catch {
       setMessage("暫時連唔到 Sayve。");
     } finally {

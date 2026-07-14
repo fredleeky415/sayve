@@ -191,7 +191,7 @@ export function FamilyMemoryApp() {
   const [initCurrency, setInitCurrency] = useState("HKD");
   const [initInviteMode, setInitInviteMode] = useState<"solo" | "partner">("solo");
   const [initBusy, setInitBusy] = useState(false);
-  const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
+  const swipeStartRef = useRef<{ x: number; y: number; lastX: number; lastY: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const photoPreviewsRef = useRef(photoPreviews);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -669,13 +669,25 @@ export function FamilyMemoryApp() {
     });
   }
 
-  function handlePointerUp(clientX: number, clientY: number) {
+  function startSwipe(clientX: number, clientY: number) {
+    swipeStartRef.current = { x: clientX, y: clientY, lastX: clientX, lastY: clientY };
+  }
+
+  function updateSwipe(clientX: number, clientY: number) {
     if (!swipeStartRef.current) return;
-    const deltaX = clientX - swipeStartRef.current.x;
-    const deltaY = clientY - swipeStartRef.current.y;
+    swipeStartRef.current.lastX = clientX;
+    swipeStartRef.current.lastY = clientY;
+  }
+
+  function handlePointerUp(clientX?: number, clientY?: number) {
+    if (!swipeStartRef.current) return;
+    const endX = clientX ?? swipeStartRef.current.lastX;
+    const endY = clientY ?? swipeStartRef.current.lastY;
+    const deltaX = endX - swipeStartRef.current.x;
+    const deltaY = endY - swipeStartRef.current.y;
     swipeStartRef.current = null;
     if (window.innerWidth > 720) return;
-    if (Math.abs(deltaX) < 72 || Math.abs(deltaY) > Math.abs(deltaX) * 0.75) return;
+    if (Math.abs(deltaX) < 48 || Math.abs(deltaY) > Math.abs(deltaX) * 0.95) return;
     moveTab(deltaX > 0 ? -1 : 1);
   }
 
@@ -857,8 +869,9 @@ export function FamilyMemoryApp() {
       onPointerDown={(event) => {
         if (!canStartSwipe(event.target)) return;
         if (window.innerWidth > 720) return;
-        swipeStartRef.current = { x: event.clientX, y: event.clientY };
+        startSwipe(event.clientX, event.clientY);
       }}
+      onPointerMove={(event) => updateSwipe(event.clientX, event.clientY)}
       onPointerUp={(event) => handlePointerUp(event.clientX, event.clientY)}
       onPointerCancel={() => {
         swipeStartRef.current = null;
@@ -868,12 +881,16 @@ export function FamilyMemoryApp() {
         if (window.innerWidth > 720) return;
         const touch = event.touches[0];
         if (!touch) return;
-        swipeStartRef.current = { x: touch.clientX, y: touch.clientY };
+        startSwipe(touch.clientX, touch.clientY);
+      }}
+      onTouchMove={(event) => {
+        const touch = event.touches[0];
+        if (!touch) return;
+        updateSwipe(touch.clientX, touch.clientY);
       }}
       onTouchEnd={(event) => {
         const touch = event.changedTouches[0];
-        if (!touch) return;
-        handlePointerUp(touch.clientX, touch.clientY);
+        handlePointerUp(touch?.clientX, touch?.clientY);
       }}
       onTouchCancel={() => {
         swipeStartRef.current = null;
@@ -892,10 +909,10 @@ export function FamilyMemoryApp() {
             總覽
           </button>
         </nav>
-        <div className="pageHint" aria-hidden="true">
-          <span className={activeTab === "chat" ? "active" : ""} />
-          <span className={activeTab === "home" ? "active" : ""} />
-          <span className={activeTab === "dashboard" ? "active" : ""} />
+        <div className="pageHint" aria-label="Mobile views">
+          <button type="button" className={activeTab === "chat" ? "active" : ""} aria-label="問 Sayve" onClick={() => setActiveTab("chat")} />
+          <button type="button" className={activeTab === "home" ? "active" : ""} aria-label="記低" onClick={() => setActiveTab("home")} />
+          <button type="button" className={activeTab === "dashboard" ? "active" : ""} aria-label="總覽" onClick={() => setActiveTab("dashboard")} />
         </div>
         <button className="accountButton" type="button" onClick={() => setAuthOpen((current) => !current)} title="Family login">
           <Users size={17} />

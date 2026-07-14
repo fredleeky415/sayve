@@ -109,14 +109,18 @@ b {
   gap: 5px;
 }
 
-.pageHint span {
+.pageHint button {
   width: 5px;
   height: 5px;
+  padding: 0;
+  border: 0;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.24);
+  appearance: none;
+  -webkit-appearance: none;
 }
 
-.pageHint span.active {
+.pageHint button.active {
   width: 18px;
   background: rgba(255, 255, 255, 0.82);
 }

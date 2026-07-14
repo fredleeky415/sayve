@@ -76,10 +76,23 @@ function randomPlaceholder(current?: string) {
 async function postJson(path: string, body: Record<string, unknown>) {
   const response = await fetch(path, {
     method: "POST",
+    credentials: "same-origin",
     headers: { "content-type": "application/json", ...storedAuthHeaders() },
     body: JSON.stringify(body)
   });
-  return (await response.json()) as ApiResult;
+  const payload = (await response.json()) as Partial<ApiResult> & { error?: string; protection?: { vercel_auth_enabled?: boolean } };
+  if (
+    typeof payload.current_state === "string" &&
+    typeof payload.needs_user_input === "boolean" &&
+    "confidence" in payload &&
+    "source_refs" in payload
+  ) {
+    return payload as ApiResult;
+  }
+  if (payload.error === "private_beta_access_required" || payload.protection?.vercel_auth_enabled) {
+    return captureFailedResult("私測登入好似過期咗，重新開一次 Sayve 入口再試。");
+  }
+  return captureFailedResult();
 }
 
 function confidenceText(result: ApiResult) {
@@ -546,16 +559,30 @@ export function FamilyMemoryApp() {
     setVoiceSeconds(0);
   }
 
-  async function uploadVoiceBlob(file: File, transcript?: string) {
+  async function uploadVoiceBlob(file: File, transcript?: string, householdId?: string) {
     const form = new FormData();
     form.append("file", file);
     if (transcript?.trim()) form.append("transcript", transcript.trim());
+    if (householdId?.trim()) form.append("householdId", householdId.trim());
     const response = await fetch("/api/captures/voice", {
       method: "POST",
+      credentials: "same-origin",
       headers: storedAuthHeaders(),
       body: form
     });
-    return (await response.json()) as ApiResult;
+    const payload = (await response.json()) as Partial<ApiResult> & { error?: string; protection?: { vercel_auth_enabled?: boolean } };
+    if (
+      typeof payload.current_state === "string" &&
+      typeof payload.needs_user_input === "boolean" &&
+      "confidence" in payload &&
+      "source_refs" in payload
+    ) {
+      return payload as ApiResult;
+    }
+    if (payload.error === "private_beta_access_required" || payload.protection?.vercel_auth_enabled) {
+      return captureFailedResult("私測登入好似過期咗，重新開一次 Sayve 入口再試。");
+    }
+    return captureFailedResult("暫時未儲到錄音，稍後再試一次。");
   }
 
   function voiceFileFromRecordedVoice(voice: RecordedVoice) {
@@ -589,7 +616,7 @@ export function FamilyMemoryApp() {
     setLatest(captureReceivedResult(prompt));
     setHomeProcessingCount((count) => count + 1);
     try {
-      const result = await postJson("/api/captures/text", { text: prompt });
+      const result = await postJson("/api/captures/text", { text: prompt, householdId: selectedHouseholdId });
       setLatest(result);
     } catch {
       setLatest(captureFailedResult());
@@ -606,8 +633,8 @@ export function FamilyMemoryApp() {
     setBusy(true);
     setMessages((current) => [...current, { id: crypto.randomUUID(), role: "user", content: prompt }]);
     const result = looksLikeQuestion(prompt)
-      ? await postJson("/api/conversation/ask", { question: prompt })
-      : await postJson("/api/captures/text", { text: prompt });
+      ? await postJson("/api/conversation/ask", { question: prompt, householdId: selectedHouseholdId })
+      : await postJson("/api/captures/text", { text: prompt, householdId: selectedHouseholdId });
     setLatest(result);
     setMessages((current) => [
       ...current,
@@ -637,7 +664,9 @@ export function FamilyMemoryApp() {
       setLatest(captureReceivedResult(prompt));
       setHomeProcessingCount((count) => count + 1);
       try {
-        const result = voiceFile ? await uploadVoiceBlob(voiceFile) : await postJson("/api/captures/voice", { transcript: prompt });
+        const result = voiceFile
+          ? await uploadVoiceBlob(voiceFile, undefined, selectedHouseholdId)
+          : await postJson("/api/captures/voice", { transcript: prompt, householdId: selectedHouseholdId });
         setLatest(result);
       } catch {
         setLatest(captureFailedResult());
@@ -653,8 +682,8 @@ export function FamilyMemoryApp() {
       const result = shouldAsk
         ? await postJson("/api/conversation/ask", { question: typedText })
         : voiceFile
-          ? await uploadVoiceBlob(voiceFile)
-          : await postJson("/api/captures/voice", { transcript: prompt });
+          ? await uploadVoiceBlob(voiceFile, undefined, selectedHouseholdId)
+          : await postJson("/api/captures/voice", { transcript: prompt, householdId: selectedHouseholdId });
       setLatest(result);
       setMessages((current) => [
         ...current,
@@ -676,18 +705,36 @@ export function FamilyMemoryApp() {
     }
   }
 
-  async function uploadPhoto(file: File, note?: string) {
+  async function uploadPhoto(file: File, note?: string, householdId?: string) {
     const form = new FormData();
     form.append("file", file);
     form.append("note", note || file.name);
-    const response = await fetch("/api/captures/receipt", { method: "POST", headers: storedAuthHeaders(), body: form });
-    return (await response.json()) as ApiResult;
+    if (householdId?.trim()) form.append("householdId", householdId.trim());
+    const response = await fetch("/api/captures/receipt", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: storedAuthHeaders(),
+      body: form
+    });
+    const payload = (await response.json()) as Partial<ApiResult> & { error?: string; protection?: { vercel_auth_enabled?: boolean } };
+    if (
+      typeof payload.current_state === "string" &&
+      typeof payload.needs_user_input === "boolean" &&
+      "confidence" in payload &&
+      "source_refs" in payload
+    ) {
+      return payload as ApiResult;
+    }
+    if (payload.error === "private_beta_access_required" || payload.protection?.vercel_auth_enabled) {
+      return captureFailedResult("私測登入好似過期咗，重新開一次 Sayve 入口再試。");
+    }
+    return captureFailedResult("暫時未儲到收據相，稍後再試一次。");
   }
 
   async function submitPhoto(file: File) {
     if (!requireMemoryAccess()) return;
     setBusy(true);
-    const result = await uploadPhoto(file, text.trim());
+    const result = await uploadPhoto(file, text.trim(), selectedHouseholdId);
     setLatest(result);
     if (activeTab === "chat") {
       setMessages((current) => [
@@ -717,7 +764,7 @@ export function FamilyMemoryApp() {
     setHomeProcessingCount((count) => count + 1);
     try {
       for (const file of files) {
-        lastResult = await uploadPhoto(file, note);
+        lastResult = await uploadPhoto(file, note, selectedHouseholdId);
       }
       if (lastResult) setLatest(lastResult);
     } catch {

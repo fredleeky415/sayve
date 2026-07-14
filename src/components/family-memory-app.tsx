@@ -117,6 +117,12 @@ export function shouldShowInitialization(accessToken: string | null | undefined,
   return Boolean(accessToken) && householdsResolved && householdCount === 0 && authMessage === "呢個帳戶未加入任何家庭。";
 }
 
+export function householdReadyForInteraction(accessToken: string | null | undefined, householdsResolved: boolean, householdId: string) {
+  if (!accessToken) return true;
+  if (!householdsResolved) return false;
+  return Boolean(householdId);
+}
+
 async function pause(ms: number) {
   await new Promise((resolve) => window.setTimeout(resolve, ms));
 }
@@ -262,6 +268,7 @@ export function FamilyMemoryApp() {
   const voiceChunksRef = useRef<Blob[]>([]);
   const selectedHousehold = households.find((household) => household.id === selectedHouseholdId);
   const selectedHouseholdCanWrite = householdCanWrite(selectedHousehold?.role);
+  const householdInteractionReady = householdReadyForInteraction(session?.accessToken, householdsResolved, selectedHouseholdId);
 
   useEffect(() => {
     setCapturePlaceholder(randomPlaceholder());
@@ -644,6 +651,13 @@ export function FamilyMemoryApp() {
   }
 
   function requireMemoryAccess() {
+    if (!householdInteractionReady) {
+      const message = "正在準備你嘅家庭記憶...";
+      setAuthOpen(true);
+      setAuthMessage(message);
+      setLatest(captureFailedResult(message));
+      return false;
+    }
     const issue = memoryAccessIssue(session, selectedHouseholdId);
     if (!issue) return true;
     setAuthOpen(true);
@@ -1458,9 +1472,9 @@ export function FamilyMemoryApp() {
                   }
                 }}
                 placeholder={selectedHouseholdCanWrite ? capturePlaceholder : "只讀模式：你可以問 Sayve 家庭狀況"}
-                disabled={!selectedHouseholdCanWrite}
+                disabled={!selectedHouseholdCanWrite || !householdInteractionReady}
               />
-              <button type="submit" className="captureInlineSend" disabled={!text.trim() || !selectedHouseholdCanWrite} title="Send">
+              <button type="submit" className="captureInlineSend" disabled={!text.trim() || !selectedHouseholdCanWrite || !householdInteractionReady} title="Send">
                 <Send size={18} />
               </button>
             </div>
@@ -1488,7 +1502,7 @@ export function FamilyMemoryApp() {
                   setCaptureMode("photo");
                   fileInputRef.current?.click();
                 }}
-                disabled={!selectedHouseholdCanWrite}
+                disabled={!selectedHouseholdCanWrite || !householdInteractionReady}
               >
                 <Camera size={20} />
               </button>
@@ -1498,7 +1512,7 @@ export function FamilyMemoryApp() {
                 aria-label="錄音"
                 title="錄音"
                 onClick={startVoiceStub}
-                disabled={!selectedHouseholdCanWrite}
+                disabled={!selectedHouseholdCanWrite || !householdInteractionReady}
               >
                 <Mic size={20} />
               </button>
@@ -1617,6 +1631,7 @@ export function FamilyMemoryApp() {
                   : "例如：上個月食飯用左幾多錢？"
               }
               rows={3}
+              disabled={!householdInteractionReady && Boolean(session?.accessToken)}
             />
             <div className="composerActions">
               <input
@@ -1630,13 +1645,13 @@ export function FamilyMemoryApp() {
                   event.currentTarget.value = "";
                 }}
               />
-              <button type="button" className="iconButton" onClick={() => fileInputRef.current?.click()} disabled={busy || !selectedHouseholdCanWrite} title="Photo">
+              <button type="button" className="iconButton" onClick={() => fileInputRef.current?.click()} disabled={busy || !selectedHouseholdCanWrite || !householdInteractionReady} title="Photo">
                 <Camera size={20} />
               </button>
-              <button type="button" className="iconButton" onClick={submitVoice} disabled={busy || !text.trim() || !selectedHouseholdCanWrite} title="Voice">
+              <button type="button" className="iconButton" onClick={submitVoice} disabled={busy || !text.trim() || !selectedHouseholdCanWrite || !householdInteractionReady} title="Voice">
                 <Mic size={20} />
               </button>
-              <button type="submit" className="sendButton" disabled={busy || !text.trim()} title="Send">
+              <button type="submit" className="sendButton" disabled={busy || !text.trim() || (!householdInteractionReady && Boolean(session?.accessToken))} title="Send">
                 <Send size={20} />
               </button>
             </div>

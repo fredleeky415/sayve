@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { conversationRequestBody, householdCanWrite, shouldPreserveHouseholdsOnRefreshFailure, shouldRetryApiResult, shouldShowInitialization, swipeDirection } from "./family-memory-app";
+import { conversationRequestBody, householdCanWrite, householdReadyForInteraction, shouldPreserveHouseholdsOnRefreshFailure, shouldRetryApiResult, shouldShowInitialization, swipeDirection } from "./family-memory-app";
 
 describe("family memory app conversation routing", () => {
   it("always carries the selected household into ask requests", () => {
@@ -45,5 +45,12 @@ describe("family memory app conversation routing", () => {
     expect(shouldShowInitialization("token", true, 1, "呢個帳戶未加入任何家庭。")).toBe(false);
     expect(shouldShowInitialization("token", true, 0, "家庭資料暫時未連上，Sayve 先保留你而家個家庭。")).toBe(false);
     expect(shouldShowInitialization("token", true, 0, "呢個帳戶未加入任何家庭。")).toBe(true);
+  });
+
+  it("waits for household resolution before allowing logged-in interactions", () => {
+    expect(householdReadyForInteraction("token", false, "")).toBe(false);
+    expect(householdReadyForInteraction("token", true, "")).toBe(false);
+    expect(householdReadyForInteraction("token", true, "household_lee")).toBe(true);
+    expect(householdReadyForInteraction(undefined, false, "")).toBe(true);
   });
 });

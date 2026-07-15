@@ -2635,12 +2635,13 @@ b {
 
   .mobilePager {
     overflow-x: auto;
-    overflow-y: hidden;
+    overflow-y: auto;
     scroll-snap-type: x mandatory;
     scroll-snap-stop: always;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-x: contain;
-    touch-action: pan-x;
+    overscroll-behavior-y: auto;
+    touch-action: pan-x pan-y;
     scrollbar-width: none;
   }
 
